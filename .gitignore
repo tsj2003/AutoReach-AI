@@ -1,0 +1,27 @@
+# Credentials and tokens
+credentials.json
+token.json
+
+# Logs
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Personal data
+*.csv
+*.pdf
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
