@@ -45,3 +45,14 @@ def attach(
     if not store.attach_orphaned_reply(orphan_id, body.prospect_id):
         raise HTTPException(404, "Orphaned reply not found")
     return {"ok": True}
+
+
+@router.post("/{orphan_id}/ignore")
+def ignore(
+    orphan_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    store=Depends(get_store),
+):
+    if not store.ignore_orphaned_reply(orphan_id, tenant_id=current_user.tenant_id):
+        raise HTTPException(404, "Orphaned reply not found")
+    return {"ok": True}

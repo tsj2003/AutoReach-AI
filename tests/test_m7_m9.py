@@ -135,3 +135,39 @@ def test_orphaned_api_list_and_attach(auth_client):
     # Now unmatched list is empty.
     r = client.get("/api/inbox/others", headers=h)
     assert len(r.json()) == 0
+
+
+def test_orphaned_ignore_endpoint(auth_client):
+    client, tokens = auth_client
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    app = client.app
+    me = client.get("/api/auth/me", headers=h).json()
+    tid = me["tenant_id"]
+    app.state.store.save_orphaned_reply(
+        id="orph_ign", tenant_id=tid, from_email="noise@spam.com",
+        from_name=None, subject=None, snippet="not relevant", external_message_id="m_ign",
+    )
+    # Visible in unmatched.
+    assert len(client.get("/api/inbox/others", headers=h).json()) == 1
+    # Ignore it.
+    r = client.post("/api/inbox/others/orph_ign/ignore", headers=h)
+    assert r.status_code == 200
+    # Gone from the unmatched list.
+    assert len(client.get("/api/inbox/others", headers=h).json()) == 0
+
+
+def test_orphaned_ignore_is_tenant_scoped(auth_client, tmp_path):
+    """A second tenant cannot ignore another tenant's orphaned reply."""
+    client, tokens = auth_client
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    app = client.app
+    me = client.get("/api/auth/me", headers=h).json()
+    app.state.store.save_orphaned_reply(
+        id="orph_t1", tenant_id=me["tenant_id"], from_email="x@y.com",
+        from_name=None, subject=None, snippet="hi", external_message_id="m_t1",
+    )
+    # Second tenant.
+    r2 = client.post("/api/auth/signup", json={"email": "other@evil.com", "password": "Password1!"})
+    h2 = {"Authorization": f"Bearer {r2.json()['access_token']}"}
+    resp = client.post("/api/inbox/others/orph_t1/ignore", headers=h2)
+    assert resp.status_code == 404  # not visible/owned → cannot ignore

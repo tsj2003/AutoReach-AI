@@ -678,6 +678,18 @@ class SqliteStore:
                 attached_prospect_id=prospect_id, status="attached"))
             return True
 
+    def ignore_orphaned_reply(self, orphan_id: str, *, tenant_id: Optional[str] = None) -> bool:
+        with self._holder.conn() as c:
+            stmt = select(orphaned_replies_table.c.id).where(orphaned_replies_table.c.id == orphan_id)
+            if tenant_id is not None:
+                stmt = stmt.where(orphaned_replies_table.c.tenant_id == tenant_id)
+            existing = c.execute(stmt).first()
+            if not existing:
+                return False
+            c.execute(orphaned_replies_table.update().where(
+                orphaned_replies_table.c.id == orphan_id).values(status="ignored"))
+            return True
+
     # ── Engagements ───────────────────────────────────────────────────────
 
     def save_engagement(self, engagement: Engagement, *, tenant_id: Optional[str] = None) -> None:
