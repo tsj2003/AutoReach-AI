@@ -1,17 +1,50 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import { useAuth } from "../contexts/AuthContext.jsx";
+import OnboardingWizard from "../components/OnboardingWizard.jsx";
 
 function money(cents) {
   return `$${((cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const [showWizard, setShowWizard] = useState(false);
+
+  const dismissKey = user ? `autoreach_onboarded_${user.tenant_id}` : null;
+
+  function load() {
+    return api
+      .get("/api/analytics/dashboard")
+      .then((d) => {
+        setData(d);
+        return d;
+      })
+      .catch((e) => setErr(e.message));
+  }
 
   useEffect(() => {
-    api.get("/api/analytics/dashboard").then(setData).catch((e) => setErr(e.message));
-  }, []);
+    load().then((d) => {
+      if (!d || !dismissKey) return;
+      const dismissed = localStorage.getItem(dismissKey);
+      if (d.campaigns.length === 0 && !dismissed) setShowWizard(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dismissKey]);
+
+  function finishWizard() {
+    if (dismissKey) localStorage.setItem(dismissKey, "1");
+    setShowWizard(false);
+    setData(null);
+    load();
+  }
+
+  function skipWizard() {
+    if (dismissKey) localStorage.setItem(dismissKey, "1");
+    setShowWizard(false);
+  }
 
   if (err) return <div className="error">{err}</div>;
   if (!data) return <div className="muted">Loading…</div>;
@@ -29,6 +62,9 @@ export default function Dashboard() {
 
   return (
     <div>
+      {showWizard && (
+        <OnboardingWizard onComplete={finishWizard} onSkip={skipWizard} />
+      )}
       <h1>Dashboard</h1>
       <div className="stat-grid">
         {cards.map((c) => (

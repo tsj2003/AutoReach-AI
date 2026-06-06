@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import SocialAuth from "../components/SocialAuth.jsx";
 
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -15,7 +18,7 @@ export default function Login() {
     setErr("");
     setBusy(true);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       nav("/");
     } catch (e) {
       setErr(e.message);
@@ -24,27 +27,68 @@ export default function Login() {
     }
   }
 
+  function fillDemo() {
+    setEmail("demo@autoreach.ai");
+    setPassword("DemoPass123!");
+    setErr("");
+  }
+
   return (
-    <div className="auth-wrap">
-      <form className="auth-card" onSubmit={submit}>
-        <h1>AutoReach</h1>
-        <p className="muted">Sign in to your account</p>
-        {err && <div className="error">{err}</div>}
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        <button className="btn primary" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+    <div className="auth">
+      <div className="auth-blob auth-blob-1" aria-hidden />
+      <div className="auth-blob auth-blob-2" aria-hidden />
+
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <Link to="/landing" className="auth-brand">AutoReach</Link>
+        <h1 className="auth-title">Welcome back</h1>
+        <p className="auth-sub">Sign in to your account</p>
+
+        {err && <div className="auth-error">{err}</div>}
+
+        <form onSubmit={submit} className="auth-form">
+          <label className="auth-label">
+            Email
+            <input
+              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com" required autoFocus
+            />
+          </label>
+
+          <label className="auth-label">
+            Password
+            <div className="auth-pw">
+              <input
+                type={showPw ? "text" : "password"}
+                value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••" required
+              />
+              <button type="button" className="auth-pw-toggle" onClick={() => setShowPw((s) => !s)}
+                      aria-label={showPw ? "Hide password" : "Show password"}>
+                {showPw ? "Hide" : "Show"}
+              </button>
+            </div>
+          </label>
+
+          <button className="auth-btn" disabled={busy}>
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+
+        <button className="auth-demo" onClick={fillDemo} type="button">
+          ✨ Use demo account
         </button>
-        <p className="muted small">
-          No account? <Link to="/signup">Sign up</Link>
+
+        <SocialAuth onError={setErr} />
+
+        <p className="auth-foot">
+          No account? <Link to="/signup">Create one</Link>
         </p>
-      </form>
+      </motion.div>
     </div>
   );
 }

@@ -1,12 +1,15 @@
 """
-POST /api/auth/signup   — create tenant + owner user → JWT
-POST /api/auth/login    — verify credentials → JWT
-GET  /api/auth/me       — current user info
-POST /api/auth/refresh  — exchange refresh token → new access token
+POST /api/auth/signup        — create tenant + owner user → JWT
+POST /api/auth/login         — verify credentials → JWT
+POST /api/auth/google        — exchange a Google ID token → JWT (social login)
+GET  /api/auth/me            — current user info
+GET  /api/auth/social-config — which social providers are enabled (public)
+POST /api/auth/refresh       — exchange refresh token → new access token
 """
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
 from datetime import datetime, timezone
@@ -65,6 +68,15 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class GoogleLoginRequest(BaseModel):
+    credential: str  # the Google ID token (JWT) from Google Identity Services
+
+
+class SocialConfigResponse(BaseModel):
+    google_enabled: bool
+    google_client_id: str = ""
 
 
 class TokenResponse(BaseModel):
@@ -158,6 +170,94 @@ def login(body: LoginRequest, store=Depends(get_store)):
 
     tenant = store.get_tenant(user.tenant_id)
     plan = tenant.plan if tenant else "free"
+    return _make_tokens(user, plan)
+
+
+# ─── Social login (Google Identity Services) ───────────────────────────────────
+
+
+def _google_client_id() -> str:
+    """Client ID used to sign in users. Falls back to the Gmail OAuth client."""
+    return (
+        os.getenv("GOOGLE_SIGNIN_CLIENT_ID")
+        or os.getenv("GOOGLE_CLIENT_ID")
+        or ""
+    )
+
+
+@router.get("/social-config", response_model=SocialConfigResponse)
+def social_config():
+    """Public: lets the SPA decide whether to render social-login buttons."""
+    client_id = _google_client_id()
+    return SocialConfigResponse(
+        google_enabled=bool(client_id),
+        google_client_id=client_id,
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_login(body: GoogleLoginRequest, store=Depends(get_store)):
+    client_id = _google_client_id()
+    if not client_id:
+        raise HTTPException(503, "Google sign-in is not configured on this server")
+
+    # Verify the ID token signature + audience against Google's public keys.
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+    except ImportError as exc:  # pragma: no cover - dependency always present in prod
+        raise HTTPException(503, "Google auth libraries unavailable") from exc
+
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            body.credential,
+            google_requests.Request(),
+            client_id,
+            clock_skew_in_seconds=10,
+        )
+    except ValueError as exc:
+        raise HTTPException(401, "Invalid Google credential") from exc
+
+    if not claims.get("email_verified"):
+        raise HTTPException(401, "Google account email is not verified")
+
+    email = (claims.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(401, "Google credential did not include an email")
+
+    user = store.get_user_by_email(email)
+    now = datetime.now(timezone.utc)
+
+    if user is None:
+        # First-time social sign-in → provision tenant + owner user.
+        full_name = claims.get("name", "")
+        tenant = Tenant(
+            id=_new_id("tnt"),
+            name=email.split("@")[0],
+            plan="free",
+            created_at=now, updated_at=now,
+        )
+        store.save_tenant(tenant)
+        # No usable password — store an unguessable random hash. Social users
+        # authenticate via Google, never via the password login path.
+        user = User(
+            id=_new_id("usr"),
+            tenant_id=tenant.id,
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            full_name=full_name,
+            role="owner",
+            is_active=True,
+            created_at=now, updated_at=now,
+        )
+        store.save_user(user)
+        plan = tenant.plan
+    else:
+        if not user.is_active:
+            raise HTTPException(403, "This account is disabled")
+        tenant = store.get_tenant(user.tenant_id)
+        plan = tenant.plan if tenant else "free"
+
     return _make_tokens(user, plan)
 
 
