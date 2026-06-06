@@ -10,8 +10,8 @@ const PERSONAS = [
     key: "Founders",
     headline: "Book meetings while you build",
     body: "Run outbound on autopilot. The engine drafts replies to interested prospects and slots calls straight onto your calendar.",
-    metric: "12 hrs/wk",
-    metricLabel: "saved on inbox triage",
+    metric: "Auto",
+    metricLabel: "reply drafting + booking",
   },
   {
     key: "Agencies",
@@ -24,8 +24,8 @@ const PERSONAS = [
     key: "Sales teams",
     headline: "Hit primary inbox, not promotions",
     body: "Dynamic ESP matching routes Gmail-to-Gmail and Outlook-to-Outlook so reps land where buyers actually read.",
-    metric: "2.3x",
-    metricLabel: "more positive replies",
+    metric: "Gmail↔Gmail",
+    metricLabel: "ESP-matched routing",
   },
   {
     key: "Recruiters",

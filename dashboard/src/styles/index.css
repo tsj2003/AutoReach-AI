@@ -429,6 +429,7 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
   flex: 0 0 360px; background: #fff; border: 1px solid var(--lp-border); border-radius: 18px;
   padding: 24px; box-shadow: 0 8px 24px rgba(31,32,36,.05);
 }
+.lp-tm-vtitle { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; margin: 0 0 8px; color: var(--lp-lav); }
 .lp-tm-quote { font-size: 15.5px; line-height: 1.55; margin: 0 0 16px; color: var(--lp-ink); }
 .lp-tm-who { display: flex; flex-direction: column; }
 .lp-tm-name { font-weight: 700; font-size: 14px; }

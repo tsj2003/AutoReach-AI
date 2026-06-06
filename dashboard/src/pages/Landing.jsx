@@ -173,9 +173,10 @@ export default function Landing() {
         <Reveal delay={0.15}><Personas /></Reveal>
       </section>
 
-      {/* ───────── Testimonials wall ───────── */}
+      {/* ───────── Why operators will care (honest value wall) ───────── */}
       <section className="lp-love">
-        <Reveal><h2 className="lp-section-title">Operators love AutoReach</h2></Reveal>
+        <Reveal><h2 className="lp-section-title">Why operators will switch</h2></Reveal>
+        <Reveal delay={0.05}><p className="lp-section-sub">No invented testimonials. Just what the engine actually does.</p></Reveal>
         <Reveal delay={0.1}><Testimonials /></Reveal>
       </section>
 

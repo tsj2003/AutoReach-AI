@@ -1,16 +1,20 @@
 import { motion } from "framer-motion";
 
 /**
- * Two marquee rows of testimonial cards drifting in opposite directions —
- * the Wispr Flow "Flow love" wall.
+ * Honest pre-launch value wall.
+ *
+ * We have no customers yet, so we do NOT show fabricated testimonials (that
+ * would be an FTC violation and would torch trust). Instead we surface real,
+ * verifiable product capabilities as a drifting card wall in the same visual
+ * style. Swap this for genuine quotes once we have consenting users.
  */
-const QUOTES = [
-  ["AutoReach paid for itself in the first week. We stopped buying burner domains entirely.", "Maya R.", "Founder, B2B SaaS"],
-  ["The reply categorization is witchcraft. I wake up to booked calls, not a full inbox.", "Devin K.", "Head of Growth"],
-  ["Finally an outbound tool that treats deliverability like infrastructure.", "Priya S.", "Agency Owner"],
-  ["Out-of-office auto-reschedule alone saved my SDRs hours a week.", "Tom B.", "Sales Manager"],
-  ["We run 40 client domains from one dashboard. Nothing leaks across workspaces.", "Lena M.", "Cold Email Agency"],
-  ["Switched from three tools to AutoReach. Inbox placement jumped overnight.", "Arjun V.", "Demand Gen Lead"],
+const VALUE_CARDS = [
+  ["No burner-domain tax", "Connect unlimited Gmail & Outlook mailboxes on a flat plan — no per-inbox fees."],
+  ["Replies read & acted on", "Seven AI categories: Interested, Objection, OOO, Referral, Not-interested, Do-not-contact, Auto."],
+  ["Deliverability as infrastructure", "Dynamic ESP matching routes Gmail-to-Gmail and Outlook-to-Outlook for primary-inbox placement."],
+  ["Auto-rotation on health drops", "When a mailbox's bounce rate spikes, we pause it and rotate in a warmed reserve automatically."],
+  ["OOO that reschedules itself", "Out-of-office replies are parsed for the return date and the follow-up is moved accordingly."],
+  ["Built for 100k+ leads", "Cursor pagination keeps the dashboard fast whether you're on page 1 or page 1,000."],
 ];
 
 function Row({ items, duration, reverse }) {
@@ -22,13 +26,10 @@ function Row({ items, duration, reverse }) {
         animate={{ x: reverse ? ["-50%", "0%"] : ["0%", "-50%"] }}
         transition={{ duration, ease: "linear", repeat: Infinity }}
       >
-        {loop.map(([q, name, role], i) => (
+        {loop.map(([title, body], i) => (
           <div key={i} className="lp-tm-card">
-            <p className="lp-tm-quote">“{q}”</p>
-            <div className="lp-tm-who">
-              <span className="lp-tm-name">{name}</span>
-              <span className="lp-tm-role">{role}</span>
-            </div>
+            <p className="lp-tm-vtitle">{title}</p>
+            <p className="lp-tm-quote">{body}</p>
           </div>
         ))}
       </motion.div>
@@ -39,8 +40,8 @@ function Row({ items, duration, reverse }) {
 export default function Testimonials() {
   return (
     <div className="lp-tm">
-      <Row items={QUOTES.slice(0, 3)} duration={34} />
-      <Row items={QUOTES.slice(3)} duration={40} reverse />
+      <Row items={VALUE_CARDS.slice(0, 3)} duration={34} />
+      <Row items={VALUE_CARDS.slice(3)} duration={40} reverse />
     </div>
   );
 }

@@ -13,7 +13,7 @@ import Inbox from "./pages/Inbox.jsx";
 function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="center muted">Loading…</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/landing" replace />;
   return children;
 }
 
