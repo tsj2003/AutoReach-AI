@@ -233,10 +233,10 @@ def test_cockpit_health(cockpit_client):
     assert r.json()["ok"] is True
 
 
-def test_cockpit_root_redirects_to_engagements(cockpit_client):
+def test_cockpit_root_redirects_to_react_app(cockpit_client):
     r = cockpit_client.get("/", follow_redirects=False)
     assert r.status_code in (302, 307)
-    assert "/engagements" in r.headers["location"]
+    assert "/app/" in r.headers["location"]
 
 
 def test_cockpit_engagement_create_and_detail_flow(cockpit_client):

@@ -25,11 +25,16 @@ services:
         generateValue: true
       - key: AUTOREACH_SESSION_SECRET
         generateValue: true
+      # Legacy operator console is unauthenticated — keep it OFF in production.
+      - key: AUTOREACH_ENABLE_CONSOLE
+        value: "0"
       - key: GEMINI_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_SIGNIN_CLIENT_ID
         sync: false
       - key: CALCOM_WEBHOOK_SECRET
         sync: false

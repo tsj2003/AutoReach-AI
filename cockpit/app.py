@@ -212,12 +212,24 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     from cockpit.api.mailboxes import router as mailboxes_api_router
     from cockpit.api.orphaned import router as orphaned_api_router
 
-    # Jinja2 cockpit routes (operator console — no auth required)
-    app.include_router(engagements.router)
-    app.include_router(prospects.router)
-    app.include_router(replies.router)
-    app.include_router(meetings.router)
-    app.include_router(runtime_routes.router)
+    # The legacy Jinja operator console has NO authentication and is not
+    # tenant-scoped, so it must never be exposed publicly. It is enabled by
+    # default for local development and disabled in production via
+    # AUTOREACH_ENABLE_CONSOLE=0 (see render.yaml).
+    console_enabled = os.getenv("AUTOREACH_ENABLE_CONSOLE", "1").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    app.state.console_enabled = console_enabled
+
+    if console_enabled:
+        # Jinja2 cockpit routes (operator console — dev only, no auth)
+        app.include_router(engagements.router)
+        app.include_router(prospects.router)
+        app.include_router(replies.router)
+        app.include_router(meetings.router)
+        app.include_router(runtime_routes.router)
+
+    # OAuth + webhooks are needed in all environments (mailbox connect, Cal.com).
     app.include_router(oauth_router)
     app.include_router(webhooks_router)
 
@@ -234,7 +246,9 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
-        return RedirectResponse(url="/engagements", status_code=302)
+        # The front door is always the customer-facing React app. The legacy
+        # operator console (when enabled) lives at /engagements.
+        return RedirectResponse(url="/app/", status_code=302)
 
     # Serve the React SPA (M3) at /app/* if it's been built.
     dashboard_dist = STATIC_DIR / "dashboard"

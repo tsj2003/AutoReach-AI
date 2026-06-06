@@ -1,0 +1,54 @@
+"""
+The legacy Jinja operator console is unauthenticated and not tenant-scoped, so
+it must be disableable in production. These tests pin that behavior:
+
+* `/` always redirects to the customer-facing React app at `/app/`.
+* When AUTOREACH_ENABLE_CONSOLE=0, the console routes (e.g. /engagements) 404.
+* When enabled (default), the console routes are reachable.
+"""
+
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+def _make_client(tmp_path, name):
+    from cockpit import create_app
+    app = create_app(db_url=f"sqlite:///{tmp_path / name}")
+    # follow_redirects=False so we can assert on the 302 itself.
+    return TestClient(app, raise_server_exceptions=True, follow_redirects=False)
+
+
+def test_root_redirects_to_react_app(tmp_path, monkeypatch):
+    monkeypatch.delenv("AUTOREACH_ENABLE_CONSOLE", raising=False)
+    client = _make_client(tmp_path, "root.db")
+    r = client.get("/")
+    assert r.status_code == 302
+    assert r.headers["location"] == "/app/"
+
+
+def test_console_disabled_returns_404(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+    client = _make_client(tmp_path, "noconsole.db")
+    r = client.get("/engagements")
+    assert r.status_code == 404
+
+
+def test_console_enabled_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("AUTOREACH_ENABLE_CONSOLE", raising=False)
+    client = _make_client(tmp_path, "console.db")
+    r = client.get("/engagements")
+    # Reachable (renders HTML) — not a 404.
+    assert r.status_code == 200
+
+
+def test_api_still_works_when_console_disabled(tmp_path, monkeypatch):
+    """Disabling the console must not affect the JSON API the SPA relies on."""
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+    client = _make_client(tmp_path, "apionly.db")
+    r = client.post("/api/auth/signup", json={
+        "email": "founder@acme.com", "password": "Password1!", "company_name": "Acme",
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["access_token"]
