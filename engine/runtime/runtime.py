@@ -30,7 +30,7 @@ from engine.core.protocols import (
     Store,
 )
 from engine.core.state import IllegalTransition, JobState, JobStateMachine
-from engine.core.types import Agent, Event, EventKind, Job
+from engine.core.types import Agent, Event, EventKind, Job, JobKind
 from engine.runtime.contexts import DefaultAdapterContext, DefaultAgentContext
 from engine.runtime.registry import AdapterRegistry
 from engine.runtime.results import AdapterResultData
@@ -263,6 +263,23 @@ class EngineRuntime:
             prospect_id=job.prospect_id,
             payload={"output_keys": sorted(output.keys())},
         )
+        # Advance the prospect to 'contacted' after a successful email send,
+        # so multi-step sequence planning treats them as mid-sequence (not new).
+        # Only advance a 'new' prospect — never override replied/booked/unsubscribed.
+        if job.kind == JobKind.EMAIL_SEND and job.prospect_id:
+            self._advance_prospect_to_contacted(job.prospect_id)
+
+    def _advance_prospect_to_contacted(self, prospect_id: str) -> None:
+        prospect = self._store.get_prospect(prospect_id)
+        if prospect is None or prospect.status != "new":
+            return
+        from engine.core.types import Prospect
+        self._store.save_prospect(Prospect(
+            id=prospect.id, engagement_id=prospect.engagement_id, email=prospect.email,
+            full_name=prospect.full_name, company=prospect.company, title=prospect.title,
+            raw=prospect.raw, research=prospect.research, status="contacted",
+            created_at=prospect.created_at,
+        ))
 
     def _fail_job(
         self,

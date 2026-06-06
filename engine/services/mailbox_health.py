@@ -83,6 +83,36 @@ class MailboxHealthMonitor:
             return True
         return False
 
+    def auto_rotate(self, mailbox_id: str) -> Optional[str]:
+        """
+        SISR rotation: if `mailbox_id` is unhealthy, pause it and activate the
+        next healthy reserve mailbox in the same tenant. Returns the id of the
+        mailbox rotated in, or None if none rotated.
+
+        A "reserve" is a mailbox in status 'warming' or 'paused-but-healthy'
+        within the same tenant that isn't the unhealthy one.
+        """
+        mailbox = self._store.get_mailbox(mailbox_id)
+        if mailbox is None:
+            return None
+        if self.check_health(mailbox_id).healthy:
+            return None  # nothing to rotate
+
+        # Pause the unhealthy one.
+        self._store.update_mailbox_status(
+            mailbox_id, status="paused", last_error="auto-rotated out (unhealthy)",
+        )
+
+        # Find a reserve in the same tenant.
+        for mb in self._store.list_mailboxes(mailbox.tenant_id):
+            if mb.id == mailbox_id:
+                continue
+            if mb.status in ("warming", "active") and self.check_health(mb.id).healthy:
+                # Promote it to active.
+                self._store.update_mailbox_status(mb.id, status="active")
+                return mb.id
+        return None
+
     def warmup_tick(self, tenant_id: str) -> int:
         """
         Advance warmup day for all warming/active mailboxes in a tenant and

@@ -1,32 +1,37 @@
 """
 ReplyClassifier — Gemini-powered classification + draft of incoming replies.
 
-Single public function: `classify_and_draft(...)`. Returns a typed result
-the cockpit and reply-detector both consume.
+Single public function: `classify_and_draft(...)`. Returns a typed result the
+cockpit, reply-detector, and ReplyActionExecutor consume.
 
 Categories (closed set)
 -----------------------
-* interested   — wants a call/demo/pricing/more info; lead is hot
-* objection    — has questions, concerns, says they're busy, "maybe later"
-* unsubscribe  — explicit "no", "remove me", "stop", polite uninterest
-* auto         — out-of-office / bounce / autoresponder / not a real human reply
+* interested      — wants a call/demo/pricing/more info; lead is hot
+* objection       — questions, concerns, "we're busy", "maybe later"
+* not_interested  — soft no, "not a fit right now", but not hostile/opt-out
+* out_of_office   — vacation/OOO responder; we extract a return date and
+                    reschedule the follow-up rather than stop it
+* referral        — "talk to <someone else>"; we extract the referred contact
+* do_not_contact  — hard opt-out / "remove me" / legal-toned; unsubscribe + blocklist
+* unsubscribe     — explicit opt-out (kept for backward compat; treated like DNC)
+* auto            — bounce / autoresponder that is NOT an OOO (e.g. mailer-daemon)
 
-`auto` is critical because we never want to mark a prospect as `replied`
-on an autoresponder. The reply detector uses this distinction to delay
-the next sequence step rather than stop it.
+Extra extracted fields (best-effort, may be empty):
+* return_date     — ISO date string for out_of_office
+* referred_email  — email address for referral
+* referred_name   — name for referral
 
 Failure mode
 ------------
-If Gemini is unavailable / errors / safety-blocks, we return a
-deterministic safe-default: classification='objection', empty draft,
-`fallback_used=True`. The cockpit shows a yellow banner so the operator
-knows they need to write the reply by hand. We never block on LLM failure.
+Any Gemini failure → safe default: ('objection', '', fallback_used=True).
+Never raises, never blocks the pipeline.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from typing import Optional
 
 from engine.llm.gemini import (
@@ -38,7 +43,19 @@ from engine.llm.gemini import (
 
 logger = logging.getLogger(__name__)
 
-VALID_CLASSIFICATIONS = ("interested", "objection", "unsubscribe", "auto")
+VALID_CLASSIFICATIONS = (
+    "interested",
+    "objection",
+    "not_interested",
+    "out_of_office",
+    "referral",
+    "do_not_contact",
+    "unsubscribe",   # legacy alias for do_not_contact
+    "auto",
+)
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_ISO_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
 
 @dataclass(frozen=True)
@@ -50,59 +67,67 @@ class ClassificationResult:
     fallback_used: bool
     error: Optional[str]
     estimated_cost_cents: int
+    # Best-effort extracted structured data (may be empty).
+    return_date: Optional[str] = None          # ISO date for out_of_office
+    referred_email: Optional[str] = None        # for referral
+    referred_name: Optional[str] = None         # for referral
 
 
 _PROMPT_TEMPLATE = """\
-You are classifying an incoming email reply to a cold outbound message,
-and drafting a short response on behalf of the sender.
+You classify an incoming email reply to a cold outbound message and draft a
+short response on behalf of the sender.
 
-Classify the reply intent into exactly one of:
+Classify into exactly one of:
+  - "interested":     wants a call/demo/pricing/more info, or asks a genuine
+                      forward-moving question.
+  - "objection":      has concerns/questions, "we're busy", "send info", "maybe later".
+  - "not_interested": soft no — "not a fit", "not right now" — polite, not hostile.
+  - "out_of_office":  vacation / OOO auto-reply from a human's mailbox. If a
+                      return date is mentioned, extract it as ISO (YYYY-MM-DD).
+  - "referral":       points you to a different person ("talk to Jane", "loop in
+                      our CTO"). Extract the referred person's email and/or name.
+  - "do_not_contact": hard opt-out — "remove me", "stop", "unsubscribe", legal tone.
+  - "auto":           bounce / mailer-daemon / non-OOO autoresponder.
 
-  - "interested": prospect wants a call / demo / pricing / more info, OR
-                  asks any genuine question that moves the conversation forward.
-  - "objection":  prospect has questions, concerns, "we're busy", "send more info",
-                  "maybe later", or any non-committal but-not-hostile reply.
-  - "unsubscribe": prospect says "no", "remove me", "stop", "not interested",
-                   "we use X already", "wrong person — please remove".
-  - "auto":       out-of-office / vacation responder / bounce / autoresponder /
-                  any reply that is clearly not a human typing a response.
+Draft a SHORT (max 4 sentences) suggested_reply:
+  - interested:     offer a 15-minute call, reference {booking_url} if set.
+  - objection:      acknowledge briefly, keep the door open, don't beg.
+  - not_interested: "Understood — thanks for the reply. I'll close the loop here."
+  - out_of_office:  leave empty ("") — we just reschedule.
+  - referral:       brief, gracious; ask for a warm intro to the referred person.
+  - do_not_contact: "Thanks for letting me know — I've removed you. Best of luck."
+  - auto:           leave empty ("").
 
-Then draft a SHORT (max 4 sentences) suggested reply matching the classification:
-
-  - For "interested": offer a 15-minute call and reference {{ booking_url }}
-                      if it's set. Be specific, friendly, no fluff.
-  - For "objection":  acknowledge their concern, address it briefly, gently
-                      keep the door open. Don't beg.
-  - For "unsubscribe": "Thanks for letting me know — I've removed you. Best of luck."
-                       That's it. Do not pitch.
-  - For "auto":       leave suggested_reply empty (""). We won't reply to bots.
-
-Hard rules:
-  - Never invent facts, names, dates, or claims.
-  - Never use exclamation marks.
-  - Never say you are an AI.
-  - Never apologize for "reaching out" — it weakens the position.
+Hard rules: never invent facts, no exclamation marks, never say you're an AI,
+never apologize for reaching out.
 
 Context:
-  Original outbound subject: {original_subject}
-  Original outbound body (truncated):
-  --- begin original ---
-  {original_body}
-  --- end original ---
+  Original subject: {original_subject}
+  Original body (truncated): {original_body}
+  Booking URL: {booking_url}
 
-  Booking URL we can offer: {booking_url}
-
-Incoming reply snippet (what we received):
-  --- begin reply ---
+Incoming reply:
   {snippet}
-  --- end reply ---
 
 Return STRICT JSON:
   {{
-    "classification": "interested" | "objection" | "unsubscribe" | "auto",
-    "suggested_reply": "string (empty for 'auto')"
+    "classification": "<one of the categories above>",
+    "suggested_reply": "string",
+    "return_date": "YYYY-MM-DD or empty",
+    "referred_email": "email or empty",
+    "referred_name": "name or empty"
   }}
 """
+
+
+def _fallback(error: str, cost: int = 0) -> ClassificationResult:
+    return ClassificationResult(
+        classification="objection",
+        suggested_reply="",
+        fallback_used=True,
+        error=error,
+        estimated_cost_cents=cost,
+    )
 
 
 def classify_and_draft(
@@ -114,25 +139,11 @@ def classify_and_draft(
     client: Optional[GeminiClient] = None,
     temperature: float = 0.3,
 ) -> ClassificationResult:
-    """
-    Classify a reply and draft a response.
-
-    Always returns a ClassificationResult — never raises.
-    On any failure, falls back to ('objection', '', error_message) and the
-    cockpit will surface that the operator needs to handle this manually.
-    """
+    """Classify a reply + draft a response. Never raises."""
     if not snippet or not snippet.strip():
-        return ClassificationResult(
-            classification="objection",
-            suggested_reply="",
-            fallback_used=True,
-            error="empty snippet",
-            estimated_cost_cents=0,
-        )
+        return _fallback("empty snippet")
 
     client = client or GeminiClient()
-
-    # Truncate the original body to keep prompts cheap and bounded.
     original_body = (original_body or "")[:1200]
     snippet = snippet[:1500]
 
@@ -146,48 +157,40 @@ def classify_and_draft(
     try:
         result = client.generate_json(prompt=prompt, temperature=temperature)
     except GeminiUnavailable as exc:
-        logger.info("Gemini unavailable; reply classifier falling back to default: %s", exc)
-        return ClassificationResult(
-            classification="objection",
-            suggested_reply="",
-            fallback_used=True,
-            error=str(exc),
-            estimated_cost_cents=0,
-        )
+        logger.info("Gemini unavailable; classifier fallback: %s", exc)
+        return _fallback(str(exc))
     except GeminiError as exc:
-        logger.warning("Gemini error during reply classification: %s", exc)
-        return ClassificationResult(
-            classification="objection",
-            suggested_reply="",
-            fallback_used=True,
-            error=str(exc),
-            estimated_cost_cents=0,
-        )
+        logger.warning("Gemini error during classification: %s", exc)
+        return _fallback(str(exc))
 
+    cost = estimate_cost_cents(prompt_chars=len(prompt), output_chars=len(result.raw_text))
     classification = str(result.data.get("classification") or "").strip().lower()
     if classification not in VALID_CLASSIFICATIONS:
-        # The model returned something we don't accept — treat as objection
-        # but flag fallback so the operator notices.
-        return ClassificationResult(
-            classification="objection",
-            suggested_reply="",
-            fallback_used=True,
-            error=f"invalid classification '{classification}' from gemini",
-            estimated_cost_cents=estimate_cost_cents(
-                prompt_chars=len(prompt), output_chars=len(result.raw_text),
-            ),
-        )
+        return _fallback(f"invalid classification '{classification}' from gemini", cost)
 
     suggested = str(result.data.get("suggested_reply") or "").strip()
-    if classification == "auto":
-        suggested = ""  # never auto-reply to bots
+    if classification in ("auto", "out_of_office"):
+        suggested = ""  # never auto-reply to bots / OOO
+
+    # Best-effort structured extraction with regex backstops.
+    return_date = (str(result.data.get("return_date") or "").strip() or None)
+    if classification == "out_of_office" and not return_date:
+        m = _ISO_DATE_RE.search(snippet)
+        return_date = m.group(1) if m else None
+
+    referred_email = (str(result.data.get("referred_email") or "").strip() or None)
+    if classification == "referral" and not referred_email:
+        m = _EMAIL_RE.search(snippet)
+        referred_email = m.group(0) if m else None
+    referred_name = (str(result.data.get("referred_name") or "").strip() or None)
 
     return ClassificationResult(
         classification=classification,
         suggested_reply=suggested,
         fallback_used=False,
         error=None,
-        estimated_cost_cents=estimate_cost_cents(
-            prompt_chars=len(prompt), output_chars=len(result.raw_text),
-        ),
+        estimated_cost_cents=cost,
+        return_date=return_date if classification == "out_of_office" else None,
+        referred_email=referred_email if classification == "referral" else None,
+        referred_name=referred_name if classification == "referral" else None,
     )

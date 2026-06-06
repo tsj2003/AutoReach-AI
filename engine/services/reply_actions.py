@@ -65,8 +65,21 @@ class ReplyActionExecutor:
     def handle(self, reply: Reply, *, mode: str = "hitl") -> ReplyActionResult:
         cls = reply.classification
 
-        if cls == "unsubscribe":
+        # Hard opt-outs → unsubscribe + stop, always automatic.
+        if cls in ("unsubscribe", "do_not_contact"):
             return self._unsubscribe(reply)
+
+        # Soft no → mark dead, stop sequence, no reply pushed.
+        if cls == "not_interested":
+            return self._mark_dead(reply)
+
+        # OOO → defer the prospect's next step; never reply to an auto-responder.
+        if cls == "out_of_office":
+            return self._defer_for_ooo(reply)
+
+        # Referral → create the referred contact as a new prospect, flag original.
+        if cls == "referral":
+            return self._handle_referral(reply, mode=mode)
 
         if cls == "interested":
             if mode == "autopilot" and reply.suggested_reply and self._send_fn:
@@ -87,6 +100,62 @@ class ReplyActionExecutor:
         return ReplyActionResult("flagged_for_approval", False, f"{cls} reply flagged for approval")
 
     # ── internals ──────────────────────────────────────────────────────────
+
+    def _mark_dead(self, reply: Reply) -> ReplyActionResult:
+        from engine.core.types import Prospect
+        p = self._store.get_prospect(reply.prospect_id)
+        if p is not None and p.status not in ("unsubscribed", "booked", "dead"):
+            self._store.save_prospect(Prospect(
+                id=p.id, engagement_id=p.engagement_id, email=p.email,
+                full_name=p.full_name, company=p.company, title=p.title,
+                raw=p.raw, research=p.research, status="dead", created_at=p.created_at,
+            ))
+        self._emit(EventKind.REPLY_SENT, reply, {"action": "marked_not_interested", "auto": True})
+        return ReplyActionResult("not_interested", False, "prospect marked not interested, sequence stopped")
+
+    def _defer_for_ooo(self, reply: Reply, *, default_days: int = 7) -> ReplyActionResult:
+        """Reschedule the prospect's next send to the OOO return date (or +7d)."""
+        from datetime import datetime, timedelta, timezone
+        from engine.core.types import Prospect
+
+        # Parse return date if the classifier extracted one and stashed it on the reply.
+        return_date = None
+        # Reply doesn't carry the date; the detector passes it via suggested_reply meta.
+        # We default to +default_days unless the snippet has an ISO date.
+        import re as _re
+        m = _re.search(r"\b(\d{4}-\d{2}-\d{2})\b", reply.snippet or "")
+        if m:
+            try:
+                return_date = datetime.fromisoformat(m.group(1)).replace(tzinfo=timezone.utc)
+            except ValueError:
+                return_date = None
+        resume_at = return_date or (datetime.now(timezone.utc) + timedelta(days=default_days))
+
+        p = self._store.get_prospect(reply.prospect_id)
+        if p is not None and p.status not in ("unsubscribed", "booked", "dead"):
+            new_raw = dict(p.raw or {})
+            new_raw["next_send_after"] = resume_at.isoformat()
+            # OOO is not a real reply — keep the prospect in-sequence ('contacted')
+            # so the follow-up resumes after the return date.
+            self._store.save_prospect(Prospect(
+                id=p.id, engagement_id=p.engagement_id, email=p.email,
+                full_name=p.full_name, company=p.company, title=p.title,
+                raw=new_raw, research=p.research,
+                status="contacted",
+                created_at=p.created_at,
+            ))
+        self._emit(EventKind.REPLY_SENT, reply, {
+            "action": "ooo_rescheduled", "auto": True, "resume_at": resume_at.isoformat(),
+        })
+        return ReplyActionResult("ooo_rescheduled", False, f"follow-up rescheduled to {resume_at.date()}")
+
+    def _handle_referral(self, reply: Reply, *, mode: str) -> ReplyActionResult:
+        """Flag the referral for the operator. New-prospect creation is operator-confirmed
+        (we don't auto-email a referred contact without a human in the loop)."""
+        self._emit(EventKind.REPLY_DRAFT_APPROVED, reply, {
+            "action": "referral", "pending": True, "mode": mode,
+        })
+        return ReplyActionResult("flagged_for_approval", False, "referral flagged for operator intro")
 
     def _unsubscribe(self, reply: Reply) -> ReplyActionResult:
         # Mark the prospect unsubscribed (frozen → replace).
