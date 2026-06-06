@@ -470,18 +470,45 @@ def open_storage(url: str = "sqlite:///autoreach_engine.db") -> tuple[
     "SqliteCostLedger",
 ]:
     """
-    Convenience: open a SQLite (or Postgres) URL and return the three
-    storage backends sharing one Engine.
+    Open a SQLite or Postgres URL and return the three storage backends
+    sharing one Engine.
 
-    For SQLite we enable WAL for safer concurrent reads.
+    Postgres
+    --------
+    * `postgres://` is rewritten to `postgresql://` (Render/Heroku quirk;
+      SQLAlchemy 2.x requires the latter).
+    * Connection pooling is enabled (pool_pre_ping handles stale connections).
+
+    SQLite
+    ------
+    * WAL mode for safer concurrent reads.
+    * Same Table definitions — zero schema changes between the two.
     """
-    engine = create_engine(
-        url,
-        future=True,
-        connect_args={"check_same_thread": False} if url.startswith("sqlite") else {},
-    )
+    # Normalize the Render/Heroku-style postgres scheme.
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    is_sqlite = url.startswith("sqlite")
+
+    if is_sqlite:
+        engine = create_engine(
+            url,
+            future=True,
+            connect_args={"check_same_thread": False},
+        )
+    else:
+        # Postgres (or other server DB): connection pooling.
+        engine = create_engine(
+            url,
+            future=True,
+            pool_size=5,
+            max_overflow=10,
+            pool_recycle=300,
+            pool_pre_ping=True,
+        )
+
     metadata.create_all(engine)
-    if url.startswith("sqlite"):
+    if is_sqlite:
         with engine.begin() as conn:
             conn.exec_driver_sql("PRAGMA journal_mode=WAL")
             conn.exec_driver_sql("PRAGMA synchronous=NORMAL")
