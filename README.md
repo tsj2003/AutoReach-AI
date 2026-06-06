@@ -1,5 +1,7 @@
 # AutoReach
 
+[![CI](https://github.com/tsj2003/AutoReach-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/tsj2003/AutoReach-AI/actions/workflows/ci.yml)
+
 **AI agent execution platform for outbound-as-a-service.**
 
 AutoReach is an operator-run engine that books qualified B2B meetings at scale.
