@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - AutoReach-AI</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚀%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['DM Serif Display', 'serif']
+                    },
+                    colors: {
+                        darkBg: '#0A0A0A',
+                        glassBg: 'rgba(17, 17, 17, 0.65)',
+                        accent: '#10B981',
+                        coral: '#F43F5E'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body {
+            background-color: #0A0A0A;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(244, 63, 94, 0.08) 0%, transparent 40%);
+        }
+        .glass-panel {
+            background: rgba(17, 17, 17, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glowing-btn {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .glowing-btn:hover {
+            box-shadow: 0 0 32px rgba(16, 185, 129, 0.6);
+            transform: scale(1.04);
+        }
+        .glowing-btn:active {
+            transform: scale(0.97);
+        }
+        .field {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 14px;
+            outline: none;
+            color: #f1f5f9;
+            transition: all 0.2s;
+        }
+        .field:focus {
+            border-color: #10B981;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 font-sans flex items-center justify-center p-6 selection:bg-accent/30 selection:text-white">
+
+    <div class="w-full max-w-md p-8 rounded-[32px] glass-panel shadow-2xl relative">
+        <!-- Logo -->
+        <div class="flex items-center gap-3 justify-center mb-8">
+            <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-white shadow-[0_0_15px_rgba(16, 185, 129,0.4)]">
+                <i data-lucide="send" class="h-5 w-5"></i>
+            </div>
+            <div>
+                <p class="text-lg font-extrabold tracking-tight">AutoReach-AI</p>
+            </div>
+        </div>
+
+        <h2 class="text-2xl font-serif font-extrabold text-center mb-2">Create Your Account</h2>
+        <p class="text-xs text-slate-400 text-center mb-6">Launch personalized campaigns in under 5 minutes.</p>
+
+        {% if error %}
+        <div class="mb-6 p-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-300 text-sm font-semibold flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="h-5 w-5 shrink-0"></i>
+            <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <form action="/signup" method="POST" class="space-y-4">
+            <div class="flex flex-col gap-1.5">
+                <label for="email" class="text-xs font-bold uppercase tracking-widest text-slate-400">Email Address</label>
+                <input type="email" id="email" name="email" required class="field" placeholder="you@example.com">
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+                <label for="password" class="text-xs font-bold uppercase tracking-widest text-slate-400">Password</label>
+                <input type="password" id="password" name="password" required class="field" placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="glowing-btn w-full bg-accent text-white font-bold py-4 rounded-2xl transition mt-6">
+                Create Account
+            </button>
+        </form>
+
+        <p class="mt-8 text-center text-sm text-slate-400">
+            Already have an account? <a href="/login" class="text-accent hover:underline font-semibold">Log in</a>
+        </p>
+    </div>
+
+    <script>
+        window.lucide.createIcons();
+    </script>
+</body>
+</html>

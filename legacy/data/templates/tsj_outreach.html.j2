@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <body style="font: 14px/1.6 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#1f2937;">
+    <p>Hi {{ first_name or hr_name or 'there' }},</p>
+
+    <p>I am <strong>{{ sender_name or 'reaching out' }}</strong>{% if sender_title %}, {{ sender_title }}{% endif %}. I wanted to ask if <strong>{{ company or 'your company' }}</strong> is open to relevant opportunities or conversations.</p>
+
+    {% if sender_company %}
+    <p>I am currently associated with {{ sender_company }}.</p>
+    {% endif %}
+
+    {% if sender_linkedin or sender_github or sender_website or sender_links %}
+    <p><strong>Links:</strong><br>
+    {% if sender_linkedin %}LinkedIn: <a href="{{ sender_linkedin }}">{{ sender_linkedin }}</a><br>{% endif %}
+    {% if sender_github %}GitHub: <a href="{{ sender_github }}">{{ sender_github }}</a><br>{% endif %}
+    {% if sender_website %}Website: <a href="{{ sender_website }}">{{ sender_website }}</a><br>{% endif %}
+    {% if sender_links %}{{ sender_links | replace('\n', '<br>') | safe }}{% endif %}
+    </p>
+    {% endif %}
+
+    <p>I have attached my resume or supporting document for context.</p>
+
+    <p>{{ (sender_signature or ('Best,\n' ~ sender_name)) | replace('\n', '<br>') | safe }}</p>
+  </body>
+</html>

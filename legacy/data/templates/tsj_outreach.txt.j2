@@ -1,0 +1,15 @@
+Hi {{ first_name or hr_name or 'there' }},
+
+I am {{ sender_name or 'reaching out' }}{% if sender_title %}, {{ sender_title }}{% endif %}. I wanted to ask if {{ company or 'your company' }} is open to relevant opportunities or conversations.
+
+{% if sender_company %}I am currently associated with {{ sender_company }}.
+
+{% endif %}{% if sender_linkedin or sender_github or sender_website or sender_links %}Links:
+{% if sender_linkedin %}- LinkedIn: {{ sender_linkedin }}
+{% endif %}{% if sender_github %}- GitHub: {{ sender_github }}
+{% endif %}{% if sender_website %}- Website: {{ sender_website }}
+{% endif %}{% if sender_links %}{{ sender_links }}
+{% endif %}
+{% endif %}I have attached my resume or supporting document for context.
+
+{{ sender_signature or ('Best,\n' ~ sender_name) }}

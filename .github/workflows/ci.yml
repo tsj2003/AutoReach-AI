@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests (pytest)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: autoreach
+          POSTGRES_PASSWORD: autoreach
+          POSTGRES_DB: autoreach_test
+        ports:
+          - 5432:5432
+        # Wait until Postgres is ready before the job starts using it.
+        options: >-
+          --health-cmd "pg_isready -U autoreach"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Wired so the Postgres-semantics + Celery import tests run against real services.
+      DATABASE_URL: postgresql://autoreach:autoreach@localhost:5432/autoreach_test
+      REDIS_URL: redis://localhost:6379/0
+      AUTOREACH_JWT_SECRET: ci-test-secret-not-for-production
+      AUTOREACH_SESSION_SECRET: ci-session-secret-not-for-production
+      PYTHONPATH: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system deps (psycopg2 build)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc libpq-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -p 5432 -U autoreach && break
+            echo "waiting for postgres ($i)…"; sleep 2
+          done
+
+      - name: Run full test suite
+        run: pytest tests/ -q --maxfail=1
+
+  frontend:
+    name: Frontend build (Vite/React)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: npm run build
+
+      - name: Assert build output exists
+        run: test -f cockpit/static/dashboard/index.html

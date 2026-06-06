@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚀%3C/text%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoReach-AI — Autonomous Cold Email Campaign Engine</title>
+    <meta name="description" content="Design premium cold outreach drip sequences with multi-inbox rotation, delivery defense, and AI-scrambled personalization." />
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="{{ url_for('static', filename='assets/index.js') }}"></script>
+    <link rel="stylesheet" crossorigin href="{{ url_for('static', filename='assets/index.css') }}">
+    <script>
+      window.FLASK_ERROR = {{ error|tojson|safe if error else 'null' }};
+      window.UNSUBSCRIBE_EMAIL = {{ masked_email|tojson|safe if masked_email else 'null' }};
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
