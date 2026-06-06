@@ -604,6 +604,53 @@ class SqliteStore:
         with self._holder.conn() as c:
             c.execute(mailboxes_table.update().where(mailboxes_table.c.id == mailbox_id).values(**vals))
 
+    # ── Orphaned replies (M7) ─────────────────────────────────────────────
+
+    def save_orphaned_reply(self, *, id: str, tenant_id: Optional[str], from_email: str,
+                            from_name: Optional[str], subject: Optional[str],
+                            snippet: Optional[str], external_message_id: Optional[str],
+                            status: str = "unmatched") -> None:
+        from datetime import datetime as _dt, timezone as _tz
+        values = {
+            "id": id, "tenant_id": tenant_id, "from_email": from_email,
+            "from_name": from_name, "subject": subject, "snippet": snippet,
+            "external_message_id": external_message_id, "attached_prospect_id": None,
+            "status": status, "received_at": _dt.now(_tz.utc),
+        }
+        with self._holder.conn() as c:
+            existing = c.execute(select(orphaned_replies_table.c.id).where(
+                orphaned_replies_table.c.id == id)).first()
+            if existing:
+                c.execute(orphaned_replies_table.update().where(
+                    orphaned_replies_table.c.id == id).values(**values))
+            else:
+                c.execute(orphaned_replies_table.insert().values(**values))
+
+    def get_orphaned_by_external_id(self, external_message_id: str):
+        with self._holder.conn() as c:
+            row = c.execute(select(orphaned_replies_table).where(
+                orphaned_replies_table.c.external_message_id == external_message_id)).first()
+            return dict(row._mapping) if row else None
+
+    def list_orphaned_replies(self, tenant_id: Optional[str] = None, *, status: str = "unmatched", limit: int = 100):
+        stmt = select(orphaned_replies_table).where(orphaned_replies_table.c.status == status)
+        if tenant_id is not None:
+            stmt = stmt.where(orphaned_replies_table.c.tenant_id == tenant_id)
+        stmt = stmt.order_by(orphaned_replies_table.c.received_at.desc()).limit(limit)
+        with self._holder.conn() as c:
+            return [dict(r._mapping) for r in c.execute(stmt).all()]
+
+    def attach_orphaned_reply(self, orphan_id: str, prospect_id: str) -> bool:
+        with self._holder.conn() as c:
+            existing = c.execute(select(orphaned_replies_table.c.id).where(
+                orphaned_replies_table.c.id == orphan_id)).first()
+            if not existing:
+                return False
+            c.execute(orphaned_replies_table.update().where(
+                orphaned_replies_table.c.id == orphan_id).values(
+                attached_prospect_id=prospect_id, status="attached"))
+            return True
+
     # ── Engagements ───────────────────────────────────────────────────────
 
     def save_engagement(self, engagement: Engagement, *, tenant_id: Optional[str] = None) -> None:

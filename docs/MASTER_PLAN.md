@@ -465,8 +465,15 @@ Files to create:
 | M8 | ESP matching | ✅ Done | — |
 | M6 | AI reply agent (HITL/autopilot) | ✅ Done | 141 |
 | M10 | Cursor pagination | ✅ Done (in M2) | — |
-| M7 | Orphaned replies | 🟡 Schema only | — |
+| M7 | Orphaned replies | ✅ Done | 160 |
 | M4 | DB OAuth mailboxes | ✅ Done | 153 |
-| M9 | Mailbox health + warmup | ⬜ Queued | — |
+| M9 | Mailbox health + warmup | ✅ Done | 160 |
 
-**Current: 153 tests passing. Full SaaS stack verified end-to-end via `scripts/e2e_saas_smoke.py`.**
+**Current: 160 tests passing. Full SaaS stack verified end-to-end via `scripts/e2e_saas_smoke.py`.**
+
+## ALL MILESTONES COMPLETE (M1–M13)
+
+Every milestone from both implementation plans is shipped and tested. The
+remaining roadmap items are growth/scale features (Postgres migration for
+prod, Celery wiring for distributed execution, public platform SDK) tracked
+in the phase table above, not core SaaS functionality.
