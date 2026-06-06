@@ -466,7 +466,7 @@ Files to create:
 | M6 | AI reply agent (HITL/autopilot) | ✅ Done | 141 |
 | M10 | Cursor pagination | ✅ Done (in M2) | — |
 | M7 | Orphaned replies | 🟡 Schema only | — |
-| M4 | DB OAuth mailboxes | ⬜ Queued (BYOC OAuth done; DbTokenStore pending) | — |
+| M4 | DB OAuth mailboxes | ✅ Done | 153 |
 | M9 | Mailbox health + warmup | ⬜ Queued | — |
 
-**Current: 141 tests passing. Full SaaS stack verified end-to-end via `scripts/e2e_saas_smoke.py`.**
+**Current: 153 tests passing. Full SaaS stack verified end-to-end via `scripts/e2e_saas_smoke.py`.**

@@ -191,6 +191,33 @@ orphaned_replies_table = Table(
 )
 
 
+mailboxes_table = Table(
+    "mailboxes",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("tenant_id", String, nullable=False, index=True),
+    Column("user_id", String, nullable=True),
+    Column("provider", String, nullable=False, default="gmail"),
+    Column("email_address", String, nullable=False, index=True),
+    Column("display_name", String, nullable=True),
+    # OAuth credentials (stored as JSON authorized-user-info blob)
+    Column("credentials_json", JSON, nullable=True),
+    Column("oauth_client_id", String, nullable=True),
+    Column("oauth_client_secret", String, nullable=True),
+    # Rate limits / warmup (M5/M9)
+    Column("max_emails_per_day", Integer, nullable=False, default=50),
+    Column("emails_sent_today", Integer, nullable=False, default=0),
+    Column("last_send_reset", DateTime(timezone=True), nullable=True),
+    Column("warmup_day", Integer, nullable=False, default=0),
+    # Health
+    Column("status", String, nullable=False, default="active", index=True),  # active|paused|revoked|warming
+    Column("reputation_score", Integer, nullable=False, default=100),
+    Column("last_error", Text, nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+
 replies_table = Table(
     "replies",
     metadata,
@@ -389,6 +416,30 @@ def _row_to_user(row: Any) -> User:
     )
 
 
+def _row_to_mailbox(row: Any) -> "Mailbox":
+    from engine.auth.mailbox_models import Mailbox
+    return Mailbox(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        user_id=row.user_id,
+        provider=row.provider,
+        email_address=row.email_address,
+        display_name=row.display_name,
+        credentials_json=_coerce_json(row.credentials_json) if row.credentials_json else None,
+        oauth_client_id=row.oauth_client_id,
+        oauth_client_secret=row.oauth_client_secret,
+        max_emails_per_day=row.max_emails_per_day,
+        emails_sent_today=row.emails_sent_today,
+        last_send_reset=_ensure_utc(row.last_send_reset),
+        warmup_day=row.warmup_day,
+        status=row.status,
+        reputation_score=row.reputation_score,
+        last_error=row.last_error,
+        created_at=_ensure_utc(row.created_at),  # type: ignore[arg-type]
+        updated_at=_ensure_utc(row.updated_at),  # type: ignore[arg-type]
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Connection management
 # ─────────────────────────────────────────────────────────────────────────────
@@ -502,6 +553,56 @@ class SqliteStore:
         with self._holder.conn() as c:
             rows = c.execute(select(users_table).where(users_table.c.tenant_id == tenant_id)).all()
             return [_row_to_user(r) for r in rows]
+
+    # ── Mailboxes (M4) ────────────────────────────────────────────────────
+
+    def save_mailbox(self, mailbox) -> None:
+        values = {
+            "id": mailbox.id, "tenant_id": mailbox.tenant_id, "user_id": mailbox.user_id,
+            "provider": mailbox.provider, "email_address": mailbox.email_address,
+            "display_name": mailbox.display_name,
+            "credentials_json": dict(mailbox.credentials_json) if mailbox.credentials_json else None,
+            "oauth_client_id": mailbox.oauth_client_id,
+            "oauth_client_secret": mailbox.oauth_client_secret,
+            "max_emails_per_day": mailbox.max_emails_per_day,
+            "emails_sent_today": mailbox.emails_sent_today,
+            "last_send_reset": mailbox.last_send_reset,
+            "warmup_day": mailbox.warmup_day, "status": mailbox.status,
+            "reputation_score": mailbox.reputation_score, "last_error": mailbox.last_error,
+            "created_at": mailbox.created_at, "updated_at": mailbox.updated_at,
+        }
+        with self._holder.conn() as c:
+            existing = c.execute(select(mailboxes_table.c.id).where(mailboxes_table.c.id == mailbox.id)).first()
+            if existing:
+                c.execute(mailboxes_table.update().where(mailboxes_table.c.id == mailbox.id).values(**values))
+            else:
+                c.execute(mailboxes_table.insert().values(**values))
+
+    def get_mailbox(self, mailbox_id: str):
+        with self._holder.conn() as c:
+            row = c.execute(select(mailboxes_table).where(mailboxes_table.c.id == mailbox_id)).first()
+            return _row_to_mailbox(row) if row else None
+
+    def list_mailboxes(self, tenant_id: str, *, status: Optional[str] = None):
+        stmt = select(mailboxes_table).where(mailboxes_table.c.tenant_id == tenant_id)
+        if status is not None:
+            stmt = stmt.where(mailboxes_table.c.status == status)
+        with self._holder.conn() as c:
+            return [_row_to_mailbox(r) for r in c.execute(stmt).all()]
+
+    def update_mailbox_credentials(self, mailbox_id: str, *, credentials_json: dict) -> None:
+        with self._holder.conn() as c:
+            c.execute(mailboxes_table.update().where(mailboxes_table.c.id == mailbox_id).values(
+                credentials_json=dict(credentials_json),
+                updated_at=datetime.now(timezone.utc),
+            ))
+
+    def update_mailbox_status(self, mailbox_id: str, *, status: str, last_error: Optional[str] = None) -> None:
+        vals = {"status": status, "updated_at": datetime.now(timezone.utc)}
+        if last_error is not None:
+            vals["last_error"] = last_error
+        with self._holder.conn() as c:
+            c.execute(mailboxes_table.update().where(mailboxes_table.c.id == mailbox_id).values(**vals))
 
     # ── Engagements ───────────────────────────────────────────────────────
 

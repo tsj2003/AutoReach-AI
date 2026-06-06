@@ -209,6 +209,7 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     from cockpit.api.meetings_api import router as meetings_api_router
     from cockpit.api.analytics import router as analytics_api_router
     from cockpit.api.billing import router as billing_api_router
+    from cockpit.api.mailboxes import router as mailboxes_api_router
 
     # Jinja2 cockpit routes (operator console — no auth required)
     app.include_router(engagements.router)
@@ -227,6 +228,7 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     app.include_router(meetings_api_router)
     app.include_router(analytics_api_router)
     app.include_router(billing_api_router)
+    app.include_router(mailboxes_api_router)
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
