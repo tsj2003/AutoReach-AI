@@ -25,8 +25,19 @@ def test_postgres_scheme_rewrite(monkeypatch):
     assert captured["url"].startswith("postgresql://")
 
 
-def test_asgi_app_builds():
-    import asgi
+def test_asgi_app_builds(monkeypatch, tmp_path):
+    """The ASGI entrypoint builds a FastAPI app. Force SQLite so this test
+    never depends on a reachable Postgres (CI sets DATABASE_URL globally)."""
+    import importlib
+    import sys
+
+    monkeypatch.setenv("AUTOREACH_DB", f"sqlite:///{tmp_path / 'asgi.db'}")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    # Re-import asgi fresh so it picks up the overridden env.
+    sys.modules.pop("asgi", None)
+    asgi = importlib.import_module("asgi")
+
     from fastapi import FastAPI
     assert isinstance(asgi.app, FastAPI)
 
