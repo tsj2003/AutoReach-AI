@@ -477,3 +477,5 @@ Every milestone from both implementation plans is shipped and tested. The
 remaining roadmap items are growth/scale features (Postgres migration for
 prod, Celery wiring for distributed execution, public platform SDK) tracked
 in the phase table above, not core SaaS functionality.
+
+<!-- ci: verified green on main -->
