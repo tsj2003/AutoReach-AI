@@ -1,0 +1,77 @@
+{% extends "_base.html" %}
+{% block title %}Meetings · {{ engagement.customer_name }}{% endblock %}
+{% block content %}
+
+<section class="page-head">
+  <div>
+    <h1>Meetings</h1>
+    <div class="muted"><a href="/engagements/{{ engagement.id }}">{{ engagement.customer_name }}</a></div>
+  </div>
+</section>
+
+{% if report %}
+<section class="cards">
+  <div class="card">
+    <h3>P&amp;L this engagement</h3>
+    <dl>
+      <dt>Booked</dt><dd>{{ report.booked_count }}</dd>
+      <dt>Qualified</dt><dd>{{ report.qualified_count }} (revenue countable)</dd>
+      <dt>No-show</dt><dd>{{ report.no_show_count }}</dd>
+      <dt>Cancelled</dt><dd>{{ report.cancelled_count }}</dd>
+      <dt>Revenue</dt><dd>{{ report.revenue_cents|cents }}</dd>
+      <dt>Cost</dt><dd>{{ report.cost_cents|cents }}</dd>
+      <dt>Margin</dt><dd>{{ report.margin_cents|cents }} ({{ report.margin_pct|pct }})</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3>Book a meeting</h3>
+    <form method="post" action="/engagements/{{ engagement.id }}/meetings" class="form">
+      <label>Prospect ID <input type="text" name="prospect_id" required placeholder="p_..." /></label>
+      <label>Scheduled (UTC) <input type="datetime-local" name="scheduled_for" required /></label>
+      <label>Reply ID (optional) <input type="text" name="reply_id" placeholder="rep_..." /></label>
+      <label>Notes <textarea name="notes" rows="2"></textarea></label>
+      <button class="btn primary" type="submit">Book</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+<table class="data">
+  <thead>
+    <tr><th>Prospect</th><th>Scheduled</th><th>Status</th><th>Notes</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for item in meetings %}
+    {% set m = item.meeting %}
+    {% set p = item.prospect %}
+    <tr>
+      <td>
+        <strong>{{ p.email if p else m.prospect_id }}</strong>
+        {% if p and p.company %}<div class="muted small">{{ p.company }}</div>{% endif %}
+      </td>
+      <td>{{ m.scheduled_for.strftime("%Y-%m-%d %H:%M UTC") }}</td>
+      <td><span class="pill pill-{{ m.status }}">{{ m.status }}</span></td>
+      <td>{{ m.notes or "—" }}</td>
+      <td>
+        {% if m.status == "booked" %}
+          <form method="post" action="/meetings/{{ m.id }}/status" class="inline">
+            <input type="hidden" name="status" value="qualified" />
+            <button class="btn primary small" type="submit">Qualify</button>
+          </form>
+          <form method="post" action="/meetings/{{ m.id }}/status" class="inline">
+            <input type="hidden" name="status" value="no_show" />
+            <button class="btn small" type="submit">No-show</button>
+          </form>
+          <form method="post" action="/meetings/{{ m.id }}/status" class="inline">
+            <input type="hidden" name="status" value="cancelled" />
+            <button class="btn danger small" type="submit">Cancel</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

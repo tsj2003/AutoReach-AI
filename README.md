@@ -1,99 +1,156 @@
-## Bulk Gmail Sender (CSV + Jinja)
+# AutoReach
 
-This folder contains a ready-to-run Python script to send personalized emails through the Gmail API using data from a CSV and Jinja2 templates. An optional Google Apps Script is also provided to send from a Google Sheet.
+**AI agent execution platform for outbound-as-a-service.**
 
-### Prerequisites
-- Python 3.9+
-- A Google Cloud project with Gmail API enabled
-- OAuth 2.0 Client ID (Desktop) JSON downloaded as `credentials.json`
+AutoReach is an operator-run engine that books qualified B2B meetings at scale.
+The first product on top is **outbound-as-a-service (OaaS)**: you give an engagement
+an offer, a prospect list, and a calendar link; the engine personalizes, sends,
+detects replies, classifies them with Gemini, drafts responses, and books meetings.
+The second product (Phase 6) is the public platform SDK — runtime infrastructure
+for any AI agent that takes real-world actions.
 
-### Install
+See `docs/PLATFORM.md` for the thesis. See `docs/MASTER_PLAN.md` for the roadmap.
+
+---
+
+## Quick start (single-operator cockpit)
+
 ```bash
-cd /Users/tarandeepsinghjuneja/email
-python3 -m venv .venv
-source .venv/bin/activate
+# 1. Install Python deps
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# 2. Copy + fill env
+cp .env.example .env   # edit with your keys
+
+# 3. Start the cockpit
+python scripts/run_cockpit.py
+# → opens http://127.0.0.1:8765
 ```
 
-### Files
-- `bulk_mail.py`: CLI to send emails from CSV using Gmail API
-- `recipients.sample.csv`: Example CSV with columns: `email,name,action_url,subject,cc,bcc`
-- `templates/email.html.j2`: HTML Jinja template
-- `templates/email.txt.j2`: Text Jinja template
-- `requirements.txt`: Dependencies
+### Connect Gmail (optional — cockpit works without it)
 
-### Prepare OAuth
-1. Go to Google Cloud Console → APIs & Services → Credentials.
-2. Create OAuth client ID (Desktop) and download JSON to `credentials.json` in this folder.
-3. First run opens a browser to authorize; a `token.json` is stored for future runs.
+The cockpit defaults to a console adapter (no real emails). To send real emails:
 
-### CSV Format
-- Required: `email`
-- Optional: `name`, `action_url`, `subject`, `cc`, `bcc` (and any additional fields referenced by your templates)
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Create an OAuth 2.0 Client ID (Desktop / Web App type)
+3. Add `http://127.0.0.1:8765/oauth/google/callback` as an authorized redirect URI
+4. Set env vars:
+   ```
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   AUTOREACH_GMAIL_SENDER=you@yourdomain.com
+   ```
+5. Click **Connect Gmail** in the cockpit topbar → follow the OAuth flow
+6. Topbar changes from "Console adapter (dev)" to "Gmail · LIVE"
 
-### Dry run (no sending)
+To test without sending real emails, set `AUTOREACH_GMAIL_DRY_RUN=1`.
+
+---
+
+## Environment variables
+
 ```bash
-python bulk_mail.py \
-  --csv recipients.sample.csv \
-  --subject "Welcome, {{ name }}!" \
-  --html-template templates/email.html.j2 \
-  --text-template templates/email.txt.j2 \
-  --dry-run --verbose
+# ── Database ────────────────────────────────────────────────────────────────
+DATABASE_URL=sqlite:///autoreach_engine.db  # default
+# or: postgresql://user:pass@localhost:5432/autoreach
+
+# ── Gmail ───────────────────────────────────────────────────────────────────
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+AUTOREACH_GMAIL_SENDER=you@yourdomain.com
+AUTOREACH_GMAIL_TOKEN_PATH=token.json       # default
+AUTOREACH_GMAIL_DRY_RUN=0                  # set to 1 to simulate sends
+AUTOREACH_OAUTH_REDIRECT_URI=http://127.0.0.1:8765/oauth/google/callback
+
+# ── Gemini ──────────────────────────────────────────────────────────────────
+GEMINI_API_KEY=                             # enables reply classification + personalization
+
+# ── Cal.com webhook ─────────────────────────────────────────────────────────
+CALCOM_WEBHOOK_SECRET=                      # from Cal.com Settings → Webhooks
+
+# ── Cockpit ─────────────────────────────────────────────────────────────────
+AUTOREACH_SESSION_SECRET=                   # random by default (sessions reset on restart)
+
+# ── Monitoring (optional) ────────────────────────────────────────────────────
+SENTRY_DSN=
+POSTHOG_API_KEY=
 ```
 
-### Send emails
+---
+
+## Architecture
+
+```
+cockpit/          FastAPI + Jinja2 operator console (http://127.0.0.1:8765)
+├── routes/       engagements, prospects, replies, meetings, oauth, webhooks
+├── templates/    server-rendered HTML
+└── static/       cockpit.css
+
+engine/           Product-agnostic AI agent execution platform
+├── core/         types, state machine, protocols
+├── adapters/     email_gmail_real, email_console, gmail_token_store
+├── agents/       OutboundAgentV1 (first-touch + personalization)
+├── runtime/      EngineRuntime, AdapterRegistry, contexts
+├── storage/      SQLite via SQLAlchemy Core (Postgres-ready)
+├── services/     operations, PnL, CSV ingest, reply detector
+└── llm/          Gemini client, reply classifier, outbound personalizer
+
+scripts/          run_cockpit.py, demo_phase1.sh
+tests/            102 tests (pytest)
+docs/             MASTER_PLAN.md, PLATFORM.md, IMPLEMENTATION_PLAN.md
+legacy/           pre-pivot Flask SaaS shell (reference only, not on import path)
+landing-page/     Vite + React 19 marketing site (npm run dev)
+```
+
+---
+
+## Key capabilities (what's built today)
+
+| Capability | Status |
+|---|---|
+| Engagement + prospect management | ✅ |
+| CSV upload (email, name, company, title) | ✅ |
+| Gmail send via OAuth (real + dry-run) | ✅ |
+| HITL trust ramp (first N sends require approval) | ✅ |
+| Retry / dead-letter / exponential backoff | ✅ |
+| Job state machine with crash-resume | ✅ |
+| Gemini reply classification (interested / objection / auto / unsubscribe) | ✅ |
+| Gmail reply detection (polls per-thread, idempotent) | ✅ |
+| Cockpit reply triage queue | ✅ |
+| Gemini AI-drafted reply suggestions | ✅ |
+| Gemini outbound personalization | ✅ |
+| Per-engagement P&L (revenue − cost) | ✅ |
+| Meeting booking + qualify / no-show / cancel | ✅ |
+| Cal.com webhook → auto-book meeting | ✅ |
+| Google OAuth flow (connect Gmail from the cockpit) | ✅ |
+| Cost ledger (LLM + email send) | ✅ |
+| Structured event log (append-only audit trail) | ✅ |
+
+---
+
+## Running tests
+
 ```bash
-python bulk_mail.py \
-  --csv recipients.sample.csv \
-  --subject "Welcome, {{ name }}!" \
-  --html-template templates/email.html.j2 \
-  --text-template templates/email.txt.j2 \
-  --from you@example.com \
-  --sleep 0.4
-```
-Notes:
-- `--from` must be your Gmail or a verified alias in your account.
-- You can omit `--subject` if your CSV includes a `subject` column.
-- Use `--limit` to test on the first N rows.
-
-### Gmail sending limits
-Respect Gmail sending limits; add delay via `--sleep`. If you hit errors, increase the delay.
-
-### Optional: Google Apps Script (Sheets → Gmail)
-If you prefer Sheets instead of Python, create a Google Sheet with headers like `email,name,subject,action_url` and add an Apps Script with the following code.
-
-```javascript
-function sendBulkEmails() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const rows = sheet.getDataRange().getValues();
-  const headers = rows.shift();
-
-  const colIndex = (name) => headers.indexOf(name);
-  const idxEmail = colIndex('email');
-  const idxName = colIndex('name');
-  const idxSubject = colIndex('subject');
-  const idxAction = colIndex('action_url');
-
-  if (idxEmail < 0 || idxSubject < 0) {
-    throw new Error('Headers must include email and subject');
-  }
-
-  rows.forEach(r => {
-    const to = r[idxEmail];
-    const name = idxName >= 0 ? r[idxName] : '';
-    const subject = r[idxSubject];
-    const actionUrl = idxAction >= 0 ? r[idxAction] : '';
-
-    const htmlBody = `Hi ${name || 'there'},<br><br>` +
-      `This is a sample personalized email.` +
-      (actionUrl ? `<br><br><a href="${actionUrl}">View details</a>` : '') +
-      `<br><br>Thanks,<br>Your Team`;
-
-    GmailApp.sendEmail(to, subject, '', { htmlBody });
-  });
-}
+.venv/bin/python -m pytest tests/ -q
+# 102 passed
 ```
 
-Grant permissions when prompted. Consider quotas in Apps Script too.
+---
 
-$ source /Users/tarandeepsinghjuneja/email/.venv/bin/activate && python /Users/tarandeepsinghjuneja/email/send_job_applications.py --csv /Users/tarandeepsinghjuneja/email/hr_contacts_safe.csv --from junejatarandeepsingh@gmail.com --batch-size 50 --delay-min 60 --delay-max 120 --email-sleep-min 100 --email-sleep-max 180 | cat
+## What's next
+
+See `docs/MASTER_PLAN.md`. Next milestones:
+
+- **M1** — JWT auth + multi-tenant data model
+- **M2** — FastAPI REST API for the React SPA
+- **M4** — Database-backed OAuth mailboxes (multi-user)
+- **M3** — React SPA dashboard (replaces Jinja cockpit for end users)
+- **M5** — Rate limits + tier enforcement
+- **M6** — AI reply agent autopilot mode
+
+---
+
+## License
+
+MIT. Built by Tarandeep Singh Juneja.

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unsubscribed — AutoReach-AI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚀%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['DM Serif Display', 'serif']
+                    },
+                    colors: {
+                        darkBg: '#0A0A0A',
+                        glassBg: 'rgba(17, 17, 17, 0.65)',
+                        accent: '#10B981',
+                        coral: '#F43F5E'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body {
+            background-color: #0A0A0A;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(244, 63, 94, 0.08) 0%, transparent 40%);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-300 font-sans flex items-center justify-center">
+    <div class="max-w-md mx-auto px-6 text-center">
+        <div class="h-20 w-20 rounded-full bg-accent/10 text-accent flex items-center justify-center border border-accent/20 mx-auto mb-6 shadow-[0_0_15px_rgba(16, 185, 129,0.2)]">
+            <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+        <h1 class="text-3xl font-serif font-extrabold text-white mb-3">You've Been Unsubscribed</h1>
+        <p class="text-slate-400 mb-2">
+            <strong class="text-slate-200">{{ masked_email }}</strong> has been removed from future emails.
+        </p>
+        <p class="text-sm text-slate-500 mt-6">You will no longer receive emails from this campaign.</p>
+        <a href="/" class="inline-block mt-8 text-accent hover:text-accent/80 text-sm font-semibold transition duration-200 transform hover:scale-[1.04] active:scale-[0.97]">&larr; Visit AutoReach-AI</a>
+    </div>
+</body>
+</html>

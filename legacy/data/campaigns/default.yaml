@@ -1,0 +1,33 @@
+data:
+  emails_failed: 0
+  emails_sent: 0
+  resume_point: 0
+  source: out/hr_contacts_cleaned.csv
+  total_contacts: 60
+email_settings:
+  attachment: CV_backend_Tarandeep_Singh_Juneja (1).pdf
+  from_name: Tarandeep Singh Juneja
+  subject: "VIT B.Tech 2026 Fresher | Backend Engineer for {{ company }} \u2013 Tarandeep\
+    \ Singh Juneja"
+  template_html: templates/application_inquiry.html.j2
+  template_text: templates/application_inquiry_v2.txt.j2
+logs:
+  error_count: 0
+  last_checked: null
+  nohup_file: null
+  process_id: null
+name: HR Outreach - Feb 2026
+sending_params:
+  batch_size: 450
+  daily_limit: 500
+  limit: null
+  sleep_max: 150
+  sleep_min: 90
+status: in_progress
+timeline:
+  completed: null
+  created: '2026-02-02T00:00:00'
+  estimated_completion: null
+  paused: null
+  resumed: '2026-02-02T18:14:00.477989'
+  started: null

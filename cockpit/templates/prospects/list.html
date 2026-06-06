@@ -1,0 +1,65 @@
+{% extends "_base.html" %}
+{% block title %}Prospects · {{ engagement.customer_name }}{% endblock %}
+{% block content %}
+
+<section class="page-head">
+  <div>
+    <h1>Prospects</h1>
+    <div class="muted"><a href="/engagements/{{ engagement.id }}">{{ engagement.customer_name }}</a> · {{ prospects|length }} loaded</div>
+  </div>
+</section>
+
+{% if ingest_result %}
+<div class="notice">
+  <strong>CSV upload result:</strong>
+  loaded <strong>{{ ingest_result.loaded }}</strong> ·
+  skipped invalid <strong>{{ ingest_result.skipped_invalid_email }}</strong> ·
+  skipped duplicates in upload <strong>{{ ingest_result.skipped_duplicates }}</strong> ·
+  skipped already in engagement <strong>{{ ingest_result.skipped_existing }}</strong> ·
+  total rows seen <strong>{{ ingest_result.total_rows }}</strong>
+  {% if ingest_result.errors %}
+    <ul>{% for e in ingest_result.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endif %}
+
+<section class="cards">
+  <div class="card">
+    <h3>Upload CSV</h3>
+    <p class="muted small">Required column: <code>email</code>. Optional: <code>name</code> / <code>full_name</code> / <code>first_name</code> + <code>last_name</code>, <code>company</code>, <code>title</code>.</p>
+    <form method="post" action="/engagements/{{ engagement.id }}/prospects/upload" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".csv,text/csv" required />
+      <button class="btn primary" type="submit">Upload</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Add one</h3>
+    <form method="post" action="/engagements/{{ engagement.id }}/prospects" class="form">
+      <label>Email <input type="email" name="email" required /></label>
+      <label>Name <input type="text" name="full_name" /></label>
+      <label>Company <input type="text" name="company" /></label>
+      <label>Title <input type="text" name="title" /></label>
+      <button class="btn" type="submit">Add</button>
+    </form>
+  </div>
+</section>
+
+<table class="data">
+  <thead>
+    <tr><th>Email</th><th>Name</th><th>Company</th><th>Title</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+  {% for p in prospects %}
+    <tr>
+      <td><code>{{ p.email }}</code></td>
+      <td>{{ p.full_name or "—" }}</td>
+      <td>{{ p.company or "—" }}</td>
+      <td>{{ p.title or "—" }}</td>
+      <td><span class="pill pill-{{ p.status }}">{{ p.status }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}
