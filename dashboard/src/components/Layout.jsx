@@ -31,6 +31,10 @@ export default function Layout() {
           <button className="btn small" onClick={logout}>
             Sign out
           </button>
+          <div className="sidebar-tag">
+            <img src="/app/brand/attainlly-icon.png" alt="" aria-hidden />
+            <span>Attainlly</span>
+          </div>
         </div>
       </aside>
       <main className="main">

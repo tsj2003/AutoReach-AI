@@ -89,6 +89,10 @@ export default function Signup() {
         <p className="auth-foot">
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
+        <div className="auth-tag">
+          <img src="/app/brand/attainlly-icon.png" alt="" aria-hidden />
+          <span>Attainlly · deliverability-first outbound</span>
+        </div>
       </motion.div>
     </div>
   );

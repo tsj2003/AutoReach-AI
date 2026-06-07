@@ -246,7 +246,10 @@ export default function Landing() {
       </section>
 
       <footer className="lp-footer">
-        <span>© {new Date().getFullYear()} Attainlly</span>
+        <span className="lp-footer-brand">
+          <img src="/app/brand/attainlly-icon.png" alt="" aria-hidden />
+          © {new Date().getFullYear()} Attainlly
+        </span>
         <span className="lp-footer-links">
           <Link to="/login">Sign in</Link>
           <a href="#pricing">Pricing</a>
