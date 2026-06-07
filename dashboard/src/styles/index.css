@@ -409,6 +409,20 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .lp-strip-marks { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-top: 16px; opacity: .7; }
 .lp-strip-mark { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
 
+/* Billing plan cards */
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 8px; }
+.plan-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px;
+  box-shadow: 0 1px 3px rgba(31,32,36,.04), 0 8px 24px rgba(31,32,36,.04);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.plan-card.current { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.plan-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+.plan-price { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; }
+.plan-per { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.plan-blurb { color: var(--muted); font-size: 13.5px; margin-bottom: 8px; }
+.plan-btn { margin-top: auto; justify-content: center; }
+
 /* Infinite logo marquee */
 .lp-marquee { overflow: hidden; width: 100%; margin: 8px 0 16px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .lp-marquee-track { display: flex; gap: 56px; width: max-content; }

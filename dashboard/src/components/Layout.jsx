@@ -7,6 +7,7 @@ export default function Layout() {
   const nav = [
     { to: "/", label: "Dashboard" },
     { to: "/campaigns", label: "Campaigns" },
+    { to: "/billing", label: "Billing" },
   ];
   return (
     <div className="shell">

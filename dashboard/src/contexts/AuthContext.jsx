@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { api, clearTokens, getAccessToken, setTokens } from "../api/client.js";
+import { api, clearTokens, getAccessToken, getRefreshToken, setTokens } from "../api/client.js";
 
 const AuthContext = createContext(null);
 
@@ -48,6 +48,23 @@ export function AuthProvider({ children }) {
     return me;
   }
 
+  async function refreshUser() {
+    // The plan lives in the JWT, so after an upgrade we mint a fresh token
+    // (refresh re-reads the tenant's current plan) before reloading the user.
+    try {
+      const refresh = getRefreshToken();
+      if (refresh) {
+        const data = await api.post("/api/auth/refresh", { refresh_token: refresh });
+        setTokens(data);
+      }
+    } catch (_) {
+      // fall through — we'll still try /me with the existing token
+    }
+    const me = await api.get("/api/auth/me");
+    setUser(me);
+    return me;
+  }
+
   function logout() {
     clearTokens();
     setUser(null);
@@ -55,7 +72,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, googleLogin, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, googleLogin, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

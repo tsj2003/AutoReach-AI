@@ -9,6 +9,7 @@ import Campaigns from "./pages/Campaigns.jsx";
 import CampaignDetail from "./pages/CampaignDetail.jsx";
 import Contacts from "./pages/Contacts.jsx";
 import Inbox from "./pages/Inbox.jsx";
+import Billing from "./pages/Billing.jsx";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="campaigns/:id" element={<CampaignDetail />} />
         <Route path="campaigns/:id/contacts" element={<Contacts />} />
         <Route path="campaigns/:id/inbox" element={<Inbox />} />
+        <Route path="billing" element={<Billing />} />
       </Route>
     </Routes>
   );
