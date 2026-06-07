@@ -11,7 +11,7 @@ export default function Layout() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">AutoReach</div>
+        <div className="brand">Attainlly</div>
         <nav>
           {nav.map((n) => (
             <Link

@@ -43,7 +43,7 @@ export default function Signup() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
-        <Link to="/landing" className="auth-brand">AutoReach</Link>
+        <Link to="/landing" className="auth-brand">Attainlly</Link>
         <h1 className="auth-title">Create your account</h1>
         <p className="auth-sub">Start your 14-day free trial</p>
 

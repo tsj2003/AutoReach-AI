@@ -38,7 +38,7 @@ export default function Landing() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <div className="lp-brand">AutoReach</div>
+        <div className="lp-brand">Attainlly</div>
         <nav className="lp-nav-links">
           <a href="#how">How it works</a>
           <a href="#engine">The engine</a>
@@ -88,7 +88,7 @@ export default function Landing() {
         >
           The engine reads every reply, routes each send through a matching mailbox,
           and rotates out any inbox before it gets flagged. You bring the offer.
-          AutoReach protects the domains and books the meetings.
+          Attainlly protects the domains and books the meetings.
         </motion.p>
 
         <motion.div
@@ -197,7 +197,7 @@ export default function Landing() {
       {/* ───────── Made for the way you work (persona switcher) ───────── */}
       <section className="lp-work">
         <Reveal><h2 className="lp-section-title">Made for the way you work</h2></Reveal>
-        <Reveal delay={0.1}><p className="lp-section-sub">Select one to see AutoReach in action.</p></Reveal>
+        <Reveal delay={0.1}><p className="lp-section-sub">Select one to see Attainlly in action.</p></Reveal>
         <Reveal delay={0.15}><Personas /></Reveal>
       </section>
 
@@ -244,7 +244,7 @@ export default function Landing() {
       </section>
 
       <footer className="lp-footer">
-        <span>© {new Date().getFullYear()} AutoReach</span>
+        <span>© {new Date().getFullYear()} Attainlly</span>
         <span className="lp-footer-links">
           <Link to="/login">Sign in</Link>
           <a href="#pricing">Pricing</a>
