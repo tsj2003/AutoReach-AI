@@ -11,7 +11,9 @@ export default function Layout() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">Attainlly</div>
+        <div className="brand">
+          <img src="/app/brand/attainlly-logo.png" alt="Attainlly" />
+        </div>
         <nav>
           {nav.map((n) => (
             <Link

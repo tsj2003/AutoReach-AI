@@ -38,7 +38,9 @@ export default function Landing() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <div className="lp-brand">Attainlly</div>
+        <div className="lp-brand">
+          <img src="/app/brand/attainlly-logo.png" alt="Attainlly" />
+        </div>
         <nav className="lp-nav-links">
           <a href="#how">How it works</a>
           <a href="#engine">The engine</a>

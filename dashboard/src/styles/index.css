@@ -62,6 +62,7 @@ h3 { font-size: 15px; margin: 0 0 8px; font-weight: 700; }
   box-shadow: 0 30px 80px rgba(31,32,36,.14); color: #16161a;
 }
 .auth-brand { display: inline-block; font-weight: 800; font-size: 20px; letter-spacing: -0.03em; color: #16161a; text-decoration: none; margin-bottom: 22px; }
+.auth-brand img { height: 34px; width: auto; display: block; }
 .auth-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px; }
 .auth-sub { color: #43444d; font-size: 15px; margin: 0 0 22px; }
 .auth-error { background: #fde4e1; border: 1px solid #f3b4ad; color: #c0392b; padding: 10px 12px; border-radius: 10px; font-size: 14px; margin-bottom: 16px; }
@@ -166,6 +167,7 @@ h3 { font-size: 15px; margin: 0 0 8px; font-weight: 700; }
   position: sticky; top: 0; height: 100vh;
 }
 .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.03em; margin: 4px 8px 28px; }
+.brand img { height: 30px; width: auto; display: block; }
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .sidebar nav a {
   padding: 10px 14px; border-radius: 11px; color: var(--muted); font-weight: 600; font-size: 14px;
@@ -319,7 +321,8 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
   position: sticky; top: 0; z-index: 20;
   backdrop-filter: saturate(140%) blur(8px);
 }
-.lp-brand { font-weight: 800; font-size: 21px; letter-spacing: -0.03em; }
+.lp-brand { font-weight: 800; font-size: 21px; letter-spacing: -0.03em; display: flex; align-items: center; }
+.lp-brand img { height: 30px; width: auto; display: block; }
 .lp-nav-links { display: flex; align-items: center; gap: 24px; }
 .lp-nav-links a { font-size: 14px; font-weight: 500; transition: color .15s; }
 .lp-nav-links a:hover { color: var(--lp-lav); }
