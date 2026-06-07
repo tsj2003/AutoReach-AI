@@ -39,6 +39,15 @@ export default function Layout() {
         </div>
       </aside>
       <main className="main">
+        {user?.trial_active && (
+          <div className="trial-banner">
+            <span>
+              ✨ You're on a free Pro trial — {user.trial_days_left} day
+              {user.trial_days_left === 1 ? "" : "s"} left.
+            </span>
+            <Link to="/billing" className="btn small primary">Choose a plan</Link>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

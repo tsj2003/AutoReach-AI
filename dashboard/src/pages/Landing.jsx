@@ -105,7 +105,7 @@ export default function Landing() {
           className="lp-trust"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
         >
-          No credit card · 14-day trial · Cancel anytime
+          No credit card · 7-day Pro trial · Cancel anytime
         </motion.div>
 
         {/* floating live demo */}
@@ -212,29 +212,51 @@ export default function Landing() {
 
       {/* ───────── Pricing ───────── */}
       <section id="pricing" className="lp-pricing">
-        <Reveal><h2 className="lp-section-title">Simple, flat pricing</h2></Reveal>
-        <Reveal delay={0.1}><p className="lp-section-sub">One plan. No per-seat games. No per-inbox tax.</p></Reveal>
+        <Reveal><h2 className="lp-section-title">Simple, honest pricing</h2></Reveal>
+        <Reveal delay={0.1}><p className="lp-section-sub">Start free for 7 days — full Pro access, no card required.</p></Reveal>
 
-        <Reveal delay={0.15}>
-          <motion.div className="lp-price-card" whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
-            <div className="lp-price-tag">
-              <span className="lp-price-amount">$97</span>
-              <span className="lp-price-period">/month</span>
-            </div>
-            <div className="lp-price-headline">Unlimited Inboxes</div>
-            <ul className="lp-price-features">
-              <li>Connect unlimited Gmail &amp; Outlook mailboxes</li>
-              <li>AI reply categorization &amp; auto-drafting</li>
-              <li>Dynamic ESP matching for inbox placement</li>
-              <li>Automatic warmup &amp; health-based rotation</li>
-              <li>Multi-step sequences with smart follow-ups</li>
-              <li>Unified inbox with Attach-Lead for forwarded replies</li>
-              <li>Unlimited leads · cursor-fast at any scale</li>
-            </ul>
-            <Link to="/signup" className="lp-btn lp-btn-lg lp-btn-block">Start Free Trial</Link>
-            <div className="lp-price-note">14 days free, then $97/mo. Cancel anytime.</div>
-          </motion.div>
-        </Reveal>
+        <div className="lp-price-grid">
+          <Reveal delay={0.12}>
+            <motion.div className="lp-price-card" whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+              <div className="lp-price-name">Starter</div>
+              <div className="lp-price-tag">
+                <span className="lp-price-amount">₹2,900</span>
+                <span className="lp-price-period">/month</span>
+              </div>
+              <div className="lp-price-headline">For founders getting started</div>
+              <ul className="lp-price-features">
+                <li>5 campaigns · 3 mailboxes</li>
+                <li>Up to 5,000 leads</li>
+                <li>AI reply categorization &amp; auto-drafting</li>
+                <li>Dynamic ESP matching</li>
+                <li>Warmup &amp; health-based rotation</li>
+              </ul>
+              <Link to="/signup" className="lp-btn lp-btn-lg lp-btn-block lp-btn-ghost">Start free trial</Link>
+            </motion.div>
+          </Reveal>
+
+          <Reveal delay={0.18}>
+            <motion.div className="lp-price-card lp-price-featured" whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+              <div className="lp-price-badge">Most popular</div>
+              <div className="lp-price-name">Pro</div>
+              <div className="lp-price-tag">
+                <span className="lp-price-amount">₹7,900</span>
+                <span className="lp-price-period">/month</span>
+              </div>
+              <div className="lp-price-headline">For teams scaling outbound</div>
+              <ul className="lp-price-features">
+                <li>25 campaigns · 15 mailboxes</li>
+                <li>Up to 50,000 leads</li>
+                <li>Everything in Starter, plus:</li>
+                <li>Multi-step sequences with smart follow-ups</li>
+                <li>Unified inbox with Attach-Lead for forwarded replies</li>
+                <li>Cursor-fast at enterprise scale</li>
+              </ul>
+              <Link to="/signup" className="lp-btn lp-btn-lg lp-btn-block">Start free trial</Link>
+            </motion.div>
+          </Reveal>
+        </div>
+        <Reveal delay={0.24}><p className="lp-price-note">7 days free on Pro, then pick a plan. Cancel anytime.</p></Reveal>
       </section>
 
       {/* ───────── Final CTA ───────── */}

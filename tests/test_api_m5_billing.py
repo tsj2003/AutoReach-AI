@@ -8,13 +8,23 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def auth_client(tmp_path):
+    import dataclasses
     from cockpit import create_app
     app = create_app(db_url=f"sqlite:///{tmp_path / 'billing.db'}")
     client = TestClient(app, raise_server_exceptions=True)
     r = client.post("/api/auth/signup", json={
         "email": "founder@acme.com", "password": "Password1!", "company_name": "Acme",
     })
-    return client, r.json()
+    tokens = r.json()
+    # New signups get a 7-day Pro trial; these tests exercise the *free* tier,
+    # so downgrade the tenant to free (no trial) and re-login for a fresh token.
+    store = app.state.store
+    tenant = store.get_tenant(tokens["tenant_id"])
+    store.save_tenant(dataclasses.replace(tenant, plan="free", trial_ends_at=None))
+    relog = client.post("/api/auth/login", json={
+        "email": "founder@acme.com", "password": "Password1!",
+    }).json()
+    return client, relog
 
 
 def test_billing_plan_endpoint(auth_client):

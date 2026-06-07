@@ -409,6 +409,13 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .lp-strip-marks { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-top: 16px; opacity: .7; }
 .lp-strip-mark { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
 
+/* Trial banner */
+.trial-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: var(--accent-soft); border: 1px solid #ddd4ff; color: var(--accent);
+  border-radius: 14px; padding: 12px 18px; margin-bottom: 24px; font-weight: 600; font-size: 14px;
+}
+
 /* Billing plan cards */
 .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 8px; }
 .plan-card {
@@ -539,11 +546,20 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 
 /* Pricing */
 .lp-pricing { background: var(--lp-cream-2); padding: 72px 24px; }
+.lp-price-grid { max-width: 880px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; }
+.lp-price-name { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--lp-ink-2); margin-bottom: 6px; }
+.lp-price-featured { border-color: var(--lp-lav); box-shadow: 0 28px 70px rgba(124,107,255,.22); position: relative; }
+.lp-price-badge {
+  position: absolute; top: -12px; right: 24px; background: var(--lp-lav); color: #fff;
+  font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(124,107,255,.35);
+}
 .lp-price-card {
   background: #fff; border: 1px solid var(--lp-border); border-radius: 22px;
   max-width: 440px; margin: 0 auto; padding: 38px; text-align: left;
-  box-shadow: 0 24px 60px rgba(31,32,36,.08);
+  box-shadow: 0 24px 60px rgba(31,32,36,.08); height: 100%; width: 100%;
 }
+.lp-price-grid .lp-price-card { max-width: none; }
 .lp-price-tag { display: flex; align-items: baseline; gap: 6px; }
 .lp-price-amount { font-size: 56px; font-weight: 800; letter-spacing: -0.035em; }
 .lp-price-period { font-size: 18px; color: var(--lp-ink-2); }
@@ -580,6 +596,7 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
   .lp-subhead { font-size: 17px; }
   .lp-section-title { font-size: 28px; }
   .lp-final h2 { font-size: 27px; }
+  .lp-price-grid { grid-template-columns: 1fr; }
   .lp-nav-links a[href="#how"], .lp-nav-links a[href="#engine"], .lp-nav-links a[href="#pricing"] { display: none; }
   .lp-blob { display: none; }
 }

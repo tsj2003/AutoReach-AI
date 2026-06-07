@@ -154,9 +154,17 @@ def test_mailbox_disconnect(auth_client):
 
 
 def test_free_plan_blocks_second_mailbox(auth_client):
+    import dataclasses
     client, tokens = auth_client
-    h = {"Authorization": f"Bearer {tokens['access_token']}"}
     app = client.app
+    # New signups get a Pro trial; this test covers the free-tier cap, so
+    # downgrade the tenant to free and re-login for a fresh token.
+    tenant = app.state.store.get_tenant(tokens["tenant_id"])
+    app.state.store.save_tenant(dataclasses.replace(tenant, plan="free", trial_ends_at=None))
+    tokens = client.post("/api/auth/login", json={
+        "email": "f@acme.com", "password": "Password1!",
+    }).json()
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
     me = client.get("/api/auth/me", headers=h).json()
     now = datetime.now(timezone.utc)
     # Seed one active mailbox (free plan cap = 1).

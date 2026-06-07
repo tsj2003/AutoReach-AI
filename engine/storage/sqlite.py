@@ -55,6 +55,7 @@ tenants_table = Table(
     Column("id", String, primary_key=True),
     Column("name", String, nullable=False),
     Column("plan", String, nullable=False, default="free"),
+    Column("trial_ends_at", DateTime(timezone=True), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
@@ -397,6 +398,7 @@ def _row_to_tenant(row: Any) -> Tenant:
         id=row.id,
         name=row.name,
         plan=row.plan,
+        trial_ends_at=_ensure_utc(row.trial_ends_at) if getattr(row, "trial_ends_at", None) else None,
         created_at=_ensure_utc(row.created_at),  # type: ignore[arg-type]
         updated_at=_ensure_utc(row.updated_at),  # type: ignore[arg-type]
     )
@@ -464,6 +466,28 @@ class _EngineHolder:
             yield connection
 
 
+def _migrate_add_columns(engine: Engine) -> None:
+    """
+    Tiny additive-migration helper: add columns introduced after initial
+    release to existing databases. SQLAlchemy's create_all never alters
+    existing tables, so we ADD COLUMN by hand (idempotent, IF NOT EXISTS where
+    supported). Only nullable columns with no default are added this way.
+    """
+    from sqlalchemy import inspect as _inspect
+
+    inspector = _inspect(engine)
+    try:
+        existing_cols = {c["name"] for c in inspector.get_columns("tenants")}
+    except Exception:
+        return  # table not present yet (fresh create_all handles it)
+
+    if "trial_ends_at" not in existing_cols:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "ALTER TABLE tenants ADD COLUMN trial_ends_at TIMESTAMP"
+            )
+
+
 def open_storage(url: str = "sqlite:///autoreach_engine.db") -> tuple[
     "SqliteStore",
     "SqliteEventSink",
@@ -508,6 +532,7 @@ def open_storage(url: str = "sqlite:///autoreach_engine.db") -> tuple[
         )
 
     metadata.create_all(engine)
+    _migrate_add_columns(engine)
     if is_sqlite:
         with engine.begin() as conn:
             conn.exec_driver_sql("PRAGMA journal_mode=WAL")
@@ -536,6 +561,7 @@ class SqliteStore:
     def save_tenant(self, tenant: Tenant) -> None:
         values = {
             "id": tenant.id, "name": tenant.name, "plan": tenant.plan,
+            "trial_ends_at": tenant.trial_ends_at,
             "created_at": tenant.created_at, "updated_at": tenant.updated_at,
         }
         with self._holder.conn() as c:

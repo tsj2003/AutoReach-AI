@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
@@ -32,6 +32,9 @@ from engine.auth import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# New accounts get a 7-day Pro trial (full features, no card required).
+TRIAL_DAYS = 7
 
 
 class SignupRequest(BaseModel):
@@ -98,6 +101,8 @@ class MeResponse(BaseModel):
     role: str
     plan: str
     tenant_name: str
+    trial_active: bool = False
+    trial_days_left: int = 0
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -105,6 +110,25 @@ class MeResponse(BaseModel):
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{secrets.token_hex(8)}"
+
+
+def _effective_plan(tenant) -> str:
+    """
+    The plan a tenant is actually entitled to right now.
+
+    During an active trial, `trial_ends_at` is in the future and tenant.plan is
+    the trial tier (pro). Once the trial lapses without a paid upgrade (paid
+    upgrades clear trial_ends_at), the effective plan falls back to 'free'.
+    """
+    if tenant is None:
+        return "free"
+    trial_ends = getattr(tenant, "trial_ends_at", None)
+    if trial_ends is not None:
+        if trial_ends.tzinfo is None:
+            trial_ends = trial_ends.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= trial_ends:
+            return "free"
+    return tenant.plan
 
 
 def _make_tokens(user: User, plan: str) -> TokenResponse:
@@ -136,10 +160,12 @@ def signup(body: SignupRequest, store=Depends(get_store)):
         raise HTTPException(409, "An account with this email already exists")
 
     now = datetime.now(timezone.utc)
+    # Every new account starts on a 7-day Pro trial — full features, no card.
     tenant = Tenant(
         id=_new_id("tnt"),
         name=body.company_name.strip() or email.split("@")[0],
-        plan="free",
+        plan="pro",
+        trial_ends_at=now + timedelta(days=TRIAL_DAYS),
         created_at=now, updated_at=now,
     )
     store.save_tenant(tenant)
@@ -169,7 +195,7 @@ def login(body: LoginRequest, store=Depends(get_store)):
         raise HTTPException(401, "Invalid email or password")
 
     tenant = store.get_tenant(user.tenant_id)
-    plan = tenant.plan if tenant else "free"
+    plan = _effective_plan(tenant)
     return _make_tokens(user, plan)
 
 
@@ -234,7 +260,8 @@ def google_login(body: GoogleLoginRequest, store=Depends(get_store)):
         tenant = Tenant(
             id=_new_id("tnt"),
             name=email.split("@")[0],
-            plan="free",
+            plan="pro",
+            trial_ends_at=now + timedelta(days=TRIAL_DAYS),
             created_at=now, updated_at=now,
         )
         store.save_tenant(tenant)
@@ -256,7 +283,7 @@ def google_login(body: GoogleLoginRequest, store=Depends(get_store)):
         if not user.is_active:
             raise HTTPException(403, "This account is disabled")
         tenant = store.get_tenant(user.tenant_id)
-        plan = tenant.plan if tenant else "free"
+        plan = _effective_plan(tenant)
 
     return _make_tokens(user, plan)
 
@@ -268,14 +295,29 @@ def me(
 ):
     user = store.get_user(current_user.user_id)
     tenant = store.get_tenant(current_user.tenant_id)
+
+    trial_active = False
+    trial_days_left = 0
+    trial_ends = getattr(tenant, "trial_ends_at", None) if tenant else None
+    if trial_ends is not None:
+        if trial_ends.tzinfo is None:
+            trial_ends = trial_ends.replace(tzinfo=timezone.utc)
+        remaining = trial_ends - datetime.now(timezone.utc)
+        if remaining.total_seconds() > 0:
+            trial_active = True
+            # Round up so the last partial day still reads as "1 day left".
+            trial_days_left = max(1, -(-int(remaining.total_seconds()) // 86400))
+
     return MeResponse(
         user_id=current_user.user_id,
         tenant_id=current_user.tenant_id,
         email=current_user.email,
         full_name=user.full_name if user else "",
         role=current_user.role,
-        plan=current_user.plan,
+        plan=_effective_plan(tenant),
         tenant_name=tenant.name if tenant else "",
+        trial_active=trial_active,
+        trial_days_left=trial_days_left,
     )
 
 
@@ -291,5 +333,5 @@ def refresh(body: RefreshRequest, store=Depends(get_store)):
         raise HTTPException(401, "User not found or inactive")
 
     tenant = store.get_tenant(user.tenant_id)
-    plan = tenant.plan if tenant else "free"
+    plan = _effective_plan(tenant)
     return _make_tokens(user, plan)

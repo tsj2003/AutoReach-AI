@@ -54,7 +54,8 @@ def test_signup_creates_tenant_and_returns_jwt(client):
     assert body["refresh_token"]
     assert body["email"] == "test@example.com"
     assert body["role"] == "owner"
-    assert body["plan"] == "free"
+    # New accounts begin on a 7-day Pro trial.
+    assert body["plan"] == "pro"
 
 
 def test_signup_duplicate_email_returns_409(client):

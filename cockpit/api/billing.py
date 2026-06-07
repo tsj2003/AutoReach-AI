@@ -45,7 +45,7 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 PURCHASABLE_PLANS: dict[str, dict] = {
     "starter": {"name": "Starter", "amount": 290000, "blurb": "5 campaigns · 3 mailboxes · 5k leads"},
-    "pro": {"name": "Pro", "amount": 790000, "blurb": "25 campaigns · 15 mailboxes · 50k leads"},
+    "pro": {"name": "Pro", "amount": 790000, "blurb": "25 campaigns · 15 mailboxes · 50k leads · unlimited-feel"},
 }
 
 
@@ -236,7 +236,7 @@ def verify_payment(
     if not tenant:
         raise HTTPException(404, "Tenant not found")
     updated = dataclasses.replace(
-        tenant, plan=plan, updated_at=datetime.now(timezone.utc)
+        tenant, plan=plan, trial_ends_at=None, updated_at=datetime.now(timezone.utc)
     )
     store.save_tenant(updated)
     logger.info("Tenant %s upgraded to plan %s", tenant.id, plan)

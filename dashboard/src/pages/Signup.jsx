@@ -47,7 +47,7 @@ export default function Signup() {
           <img src="/app/brand/attainlly-logo.png" alt="Attainlly" />
         </Link>
         <h1 className="auth-title">Create your account</h1>
-        <p className="auth-sub">Start your 14-day free trial</p>
+        <p className="auth-sub">Start your 7-day free trial</p>
 
         {err && <div className="auth-error">{err}</div>}
 
