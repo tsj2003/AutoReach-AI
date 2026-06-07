@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="40" viewBox="0 0 280 40" role="img" aria-label="Microsoft for Startups">
+  <g>
+    <rect x="0" y="6" width="13" height="13" fill="#F25022"/>
+    <rect x="15" y="6" width="13" height="13" fill="#7FBA00"/>
+    <rect x="0" y="21" width="13" height="13" fill="#00A4EF"/>
+    <rect x="15" y="21" width="13" height="13" fill="#FFB900"/>
+  </g>
+  <text x="40" y="17" font-family="Segoe UI, -apple-system, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#16161a">Microsoft</text>
+  <text x="40" y="33" font-family="Segoe UI, -apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#43444d">for Startups</text>
+</svg>

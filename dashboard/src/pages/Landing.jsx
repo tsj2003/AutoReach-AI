@@ -6,6 +6,7 @@ import InboxDemo from "../landing/InboxDemo.jsx";
 import Marquee from "../landing/Marquee.jsx";
 import Personas from "../landing/Personas.jsx";
 import Testimonials from "../landing/Testimonials.jsx";
+import MediaClip from "../landing/MediaClip.jsx";
 
 const ROTATING = [
   "without burning your domains.",
@@ -121,6 +122,20 @@ export default function Landing() {
       </Reveal>
       <Marquee items={["Gmail", "Outlook", "Cal.com", "Gemini", "Postgres", "Microsoft 365", "Google Workspace", "Redis", "Celery"]} />
 
+      {/* ───────── Backing / credibility ───────── */}
+      <Reveal className="lp-backed">
+        <span className="lp-backed-label">Backed by</span>
+        <div className="lp-backed-badges">
+          <a
+            className="lp-backed-badge"
+            href="https://www.microsoft.com/en-us/startups"
+            target="_blank" rel="noopener noreferrer"
+          >
+            <img src="/app/badges/microsoft-for-startups.svg" alt="Microsoft for Startups" />
+          </a>
+        </div>
+      </Reveal>
+
       {/* ───────── How it works — 3 modular feature blocks ───────── */}
       <section id="how" className="lp-features">
         <Reveal><h2 className="lp-section-title">Three things generic tools don't have</h2></Reveal>
@@ -130,6 +145,7 @@ export default function Landing() {
           title="AI reply categorization"
           body="Every reply is read and tagged — Interested, Objection, Out-of-Office, Referral, Not-interested, Do-not-contact. Interested replies get an instant calendar draft. OOO auto-reschedules to the return date. You wake up to booked meetings, not a full inbox."
           chips={["Interested → calendar", "OOO → reschedule", "Referral → new lead", "DNC → blocklist"]}
+          clip="/app/media/reply-categorization.mp4"
         />
         <FeatureRow
           index="02"
@@ -137,12 +153,14 @@ export default function Landing() {
           title="Dynamic ESP matching"
           body="We read each prospect's MX records and route the send through a matching mailbox — Gmail-to-Gmail, Outlook-to-Outlook. Intra-network mail is trusted more, so more of your email lands in Primary instead of Promotions."
           chips={["Gmail → Gmail", "Outlook → Outlook", "+ inbox placement"]}
+          clip="/app/media/esp-matching.mp4"
         />
         <FeatureRow
           index="03"
           title="Automatic mailbox rotation"
           body="Built-in warmup ramps and live health monitoring. The moment a mailbox's bounce rate spikes, we pause it and rotate in a healthy reserve — automatically — so one bad day never torches your whole domain."
           chips={["Warmup ramps", "Bounce-rate guard", "Auto-rotate reserve"]}
+          clip="/app/media/mailbox-rotation.mp4"
         />
       </section>
 
@@ -164,6 +182,15 @@ export default function Landing() {
             </Reveal>
           ))}
         </div>
+        <Reveal delay={0.2}>
+          <div className="lp-engine-clip">
+            <MediaClip
+              src="/app/media/security-shield.mp4"
+              orientation="landscape"
+              fallback={null}
+            />
+          </div>
+        </Reveal>
       </section>
 
       {/* ───────── Made for the way you work (persona switcher) ───────── */}
@@ -227,7 +254,24 @@ export default function Landing() {
   );
 }
 
-function FeatureRow({ index, title, body, chips, flip }) {
+function FeatureRow({ index, title, body, chips, flip, clip }) {
+  const chipVisual = (
+    <div className="lp-feature-visual">
+      {chips.map((ch, i) => (
+        <motion.div
+          key={ch}
+          className="lp-chip"
+          initial={{ opacity: 0, scale: 0.8 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: i * 0.1, type: "spring", stiffness: 280, damping: 18 }}
+        >
+          {ch}
+        </motion.div>
+      ))}
+    </div>
+  );
+
   return (
     <Reveal>
       <div className={`lp-feature ${flip ? "flip" : ""}`}>
@@ -236,20 +280,17 @@ function FeatureRow({ index, title, body, chips, flip }) {
           <h3>{title}</h3>
           <p>{body}</p>
         </div>
-        <div className="lp-feature-visual">
-          {chips.map((ch, i) => (
-            <motion.div
-              key={ch}
-              className="lp-chip"
-              initial={{ opacity: 0, scale: 0.8 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1, type: "spring", stiffness: 280, damping: 18 }}
-            >
-              {ch}
-            </motion.div>
-          ))}
-        </div>
+        {clip ? (
+          <div className="lp-feature-visual lp-feature-clip">
+            <MediaClip
+              src={clip}
+              orientation="portrait"
+              fallback={chipVisual}
+            />
+          </div>
+        ) : (
+          chipVisual
+        )}
       </div>
     </Reveal>
   );

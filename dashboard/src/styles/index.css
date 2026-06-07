@@ -435,6 +435,34 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .lp-tm-name { font-weight: 700; font-size: 14px; }
 .lp-tm-role { font-size: 13px; color: var(--lp-ink-2); }
 
+/* Landing media clips (portrait product cards + landscape band) */
+.mc { position: relative; z-index: 1; }
+.mc-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mc-portrait {
+  width: 300px; max-width: 100%; aspect-ratio: 9 / 16; margin: 0 auto;
+  border-radius: 28px; overflow: hidden; background: var(--lp-cream-2);
+  border: 1px solid var(--lp-border); box-shadow: 0 30px 80px rgba(31,32,36,.16);
+}
+.mc-landscape {
+  width: 100%; max-width: 1040px; aspect-ratio: 16 / 9; margin: 0 auto;
+  border-radius: 22px; overflow: hidden; background: var(--lp-cream-2);
+  border: 1px solid var(--lp-border); box-shadow: 0 30px 80px rgba(31,32,36,.14);
+}
+.lp-feature-clip { justify-content: center; }
+.lp-engine-clip { max-width: 1000px; margin: 48px auto 0; }
+
+/* Backed-by credibility row */
+.lp-backed { max-width: 1000px; margin: 8px auto 8px; padding: 12px 24px 28px; text-align: center; }
+.lp-backed-label { display: block; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--lp-ink-2); opacity: .7; margin-bottom: 16px; }
+.lp-backed-badges { display: flex; gap: 22px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.lp-backed-badge {
+  display: inline-flex; align-items: center; background: #fff; border: 1px solid var(--lp-border);
+  border-radius: 14px; padding: 14px 22px; box-shadow: 0 6px 20px rgba(31,32,36,.06);
+  transition: transform .15s, box-shadow .2s;
+}
+.lp-backed-badge:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(31,32,36,.1); }
+.lp-backed-badge img { height: 34px; display: block; }
+
 /* Section titles */
 .lp-section-title { font-size: 38px; font-weight: 800; letter-spacing: -0.025em; text-align: center; margin: 0 0 10px; }
 .lp-section-sub { color: var(--lp-ink-2); font-size: 17px; text-align: center; margin: 0 0 40px; }
