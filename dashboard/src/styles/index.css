@@ -342,8 +342,19 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 /* Hero */
 .lp-hero { max-width: 880px; margin: 0 auto; padding: 56px 24px 40px; text-align: center; }
 .lp-eyebrow {
-  display: inline-block; background: var(--lp-lav-soft); color: var(--lp-lav);
-  font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 999px; margin-bottom: 26px;
+  display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.7);
+  color: var(--lp-ink-2); font-size: 13px; font-weight: 600; padding: 7px 16px 7px 12px;
+  border-radius: 999px; margin-bottom: 26px; border: 1px solid var(--lp-border);
+  box-shadow: 0 2px 8px rgba(31,32,36,.05); backdrop-filter: blur(6px);
+}
+.lp-eyebrow-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #1a9e54; flex: none;
+  box-shadow: 0 0 0 0 rgba(26,158,84,.5); animation: lp-pulse 2.4s ease-out infinite;
+}
+@keyframes lp-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(26,158,84,.5); }
+  70% { box-shadow: 0 0 0 7px rgba(26,158,84,0); }
+  100% { box-shadow: 0 0 0 0 rgba(26,158,84,0); }
 }
 .lp-headline { font-size: 60px; line-height: 1.04; font-weight: 800; letter-spacing: -0.035em; margin: 0 0 24px; }
 .lp-rotate-wrap { display: block; height: 1.1em; overflow: hidden; position: relative; }
