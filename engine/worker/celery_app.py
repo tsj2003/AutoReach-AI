@@ -23,12 +23,25 @@ from __future__ import annotations
 
 import logging
 import os
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from celery import Celery
 
 logger = logging.getLogger(__name__)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+def _normalize_redis_url(url: str) -> str:
+    """Make managed TLS Redis/Valkey URLs acceptable to Celery/Kombu."""
+    if not url.startswith("rediss://"):
+        return url
+
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.setdefault("ssl_cert_reqs", "CERT_REQUIRED")
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+REDIS_URL = _normalize_redis_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
 celery_app = Celery(
     "autoreach_engine",

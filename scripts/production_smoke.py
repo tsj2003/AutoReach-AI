@@ -235,7 +235,7 @@ def _get_json(urlopen: Urlopen, url: str, *, timeout: float, token: str | None =
 def _get_text(urlopen: Urlopen, url: str, *, timeout: float) -> str:
     req = request.Request(url, method="GET")
     try:
-        with urlopen(req, timeout) as response:
+        with urlopen(req, timeout=timeout) as response:
             return response.read().decode("utf-8", errors="replace")
     except error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
@@ -263,7 +263,7 @@ def _request_json(
 
     req = request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urlopen(req, timeout) as response:
+        with urlopen(req, timeout=timeout) as response:
             raw = response.read().decode("utf-8", errors="replace")
     except error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
@@ -497,7 +497,7 @@ def _status_and_body(
 ) -> tuple[int, str]:
     req = request.Request(url, data=body, headers=headers or {}, method=method)
     try:
-        with urlopen(req, timeout) as response:
+        with urlopen(req, timeout=timeout) as response:
             status = _response_status(response)
             body = response.read().decode("utf-8", errors="replace")
             return status, body
