@@ -158,5 +158,5 @@ databases:
   - name: autoreach-redis
     engine: REDIS
     version: "7"
-    production: false
+    production: true
     cluster_name: autoreach-redis
