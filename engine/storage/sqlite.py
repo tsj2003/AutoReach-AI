@@ -40,6 +40,7 @@ from engine.core.types import (
     Prospect,
     Reply,
 )
+from engine.security.secrets import decrypt_json_blob, decrypt_text, encrypt_json_blob, encrypt_text
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Schema
@@ -427,9 +428,9 @@ def _row_to_mailbox(row: Any) -> "Mailbox":
         provider=row.provider,
         email_address=row.email_address,
         display_name=row.display_name,
-        credentials_json=_coerce_json(row.credentials_json) if row.credentials_json else None,
+        credentials_json=decrypt_json_blob(_coerce_json(row.credentials_json)) if row.credentials_json else None,
         oauth_client_id=row.oauth_client_id,
-        oauth_client_secret=row.oauth_client_secret,
+        oauth_client_secret=decrypt_text(row.oauth_client_secret),
         max_emails_per_day=row.max_emails_per_day,
         emails_sent_today=row.emails_sent_today,
         last_send_reset=_ensure_utc(row.last_send_reset),
@@ -614,9 +615,9 @@ class SqliteStore:
             "id": mailbox.id, "tenant_id": mailbox.tenant_id, "user_id": mailbox.user_id,
             "provider": mailbox.provider, "email_address": mailbox.email_address,
             "display_name": mailbox.display_name,
-            "credentials_json": dict(mailbox.credentials_json) if mailbox.credentials_json else None,
+            "credentials_json": encrypt_json_blob(dict(mailbox.credentials_json)) if mailbox.credentials_json else None,
             "oauth_client_id": mailbox.oauth_client_id,
-            "oauth_client_secret": mailbox.oauth_client_secret,
+            "oauth_client_secret": encrypt_text(mailbox.oauth_client_secret),
             "max_emails_per_day": mailbox.max_emails_per_day,
             "emails_sent_today": mailbox.emails_sent_today,
             "last_send_reset": mailbox.last_send_reset,
@@ -643,10 +644,17 @@ class SqliteStore:
         with self._holder.conn() as c:
             return [_row_to_mailbox(r) for r in c.execute(stmt).all()]
 
+    def list_all_mailboxes(self, *, status: Optional[str] = None):
+        stmt = select(mailboxes_table)
+        if status is not None:
+            stmt = stmt.where(mailboxes_table.c.status == status)
+        with self._holder.conn() as c:
+            return [_row_to_mailbox(r) for r in c.execute(stmt).all()]
+
     def update_mailbox_credentials(self, mailbox_id: str, *, credentials_json: dict) -> None:
         with self._holder.conn() as c:
             c.execute(mailboxes_table.update().where(mailboxes_table.c.id == mailbox_id).values(
-                credentials_json=dict(credentials_json),
+                credentials_json=encrypt_json_blob(dict(credentials_json)),
                 updated_at=datetime.now(timezone.utc),
             ))
 
@@ -751,6 +759,14 @@ class SqliteStore:
             row = c.execute(stmt).first()
             return _row_to_engagement(row) if row else None
 
+    def get_engagement_tenant_id(self, engagement_id: str) -> Optional[str]:
+        """Return the tenant that owns an engagement without hydrating the public dataclass."""
+        with self._holder.conn() as c:
+            row = c.execute(
+                select(engagements_table.c.tenant_id).where(engagements_table.c.id == engagement_id)
+            ).first()
+            return row.tenant_id if row else None
+
     def list_engagements(self, *, status: Optional[str] = None, tenant_id: Optional[str] = None) -> Iterable[Engagement]:
         stmt = select(engagements_table)
         if tenant_id is not None:
@@ -763,6 +779,14 @@ class SqliteStore:
     # ── Agents ────────────────────────────────────────────────────────────
 
     def save_agent(self, agent: Agent, *, tenant_id: Optional[str] = None) -> None:
+        if tenant_id is None:
+            with self._holder.conn() as c:
+                row = c.execute(
+                    select(engagements_table.c.tenant_id).where(
+                        engagements_table.c.id == agent.engagement_id
+                    )
+                ).first()
+                tenant_id = row.tenant_id if row else None
         values = {
             "id": agent.id,
             "tenant_id": tenant_id,
@@ -793,6 +817,14 @@ class SqliteStore:
     # ── Prospects ─────────────────────────────────────────────────────────
 
     def save_prospect(self, prospect: Prospect, *, tenant_id: Optional[str] = None) -> None:
+        if tenant_id is None:
+            with self._holder.conn() as c:
+                row = c.execute(
+                    select(engagements_table.c.tenant_id).where(
+                        engagements_table.c.id == prospect.engagement_id
+                    )
+                ).first()
+                tenant_id = row.tenant_id if row else None
         values = {
             "id": prospect.id,
             "tenant_id": tenant_id,
@@ -864,8 +896,16 @@ class SqliteStore:
 
     def save_job(self, job: Job) -> None:
         job.updated_at = datetime.now(timezone.utc)
+        tenant_id = None
+        with self._holder.conn() as c:
+            row = c.execute(
+                select(engagements_table.c.tenant_id).where(
+                    engagements_table.c.id == job.engagement_id
+                )
+            ).first()
+            tenant_id = row.tenant_id if row else None
         values = {
-            "id": job.id, "engagement_id": job.engagement_id,
+            "id": job.id, "tenant_id": tenant_id, "engagement_id": job.engagement_id,
             "agent_id": job.agent_id, "kind": job.kind.value,
             "payload": dict(job.payload), "state": job.state,
             "prospect_id": job.prospect_id, "parent_job_id": job.parent_job_id,
@@ -887,15 +927,28 @@ class SqliteStore:
             row = c.execute(select(jobs_table).where(jobs_table.c.id == job_id)).first()
             return _row_to_job(row) if row else None
 
-    def list_due_jobs(self, *, limit: int = 100) -> Iterable[Job]:
+    def list_due_jobs(
+        self,
+        *,
+        limit: int = 100,
+        engagement_id: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+    ) -> Iterable[Job]:
         now = datetime.now(timezone.utc)
         stmt = (
             select(jobs_table)
             .where(jobs_table.c.state.in_(("pending", "approved")))
             .where(jobs_table.c.scheduled_for <= now)
             .where((jobs_table.c.not_before.is_(None)) | (jobs_table.c.not_before <= now))
-            .order_by(jobs_table.c.scheduled_for).limit(limit)
         )
+        if engagement_id is not None:
+            stmt = stmt.where(jobs_table.c.engagement_id == engagement_id)
+        if tenant_id is not None:
+            stmt = stmt.join(
+                engagements_table,
+                jobs_table.c.engagement_id == engagements_table.c.id,
+            ).where(engagements_table.c.tenant_id == tenant_id)
+        stmt = stmt.order_by(jobs_table.c.scheduled_for).limit(limit)
         with self._holder.conn() as c:
             return [_row_to_job(r) for r in c.execute(stmt).all()]
 

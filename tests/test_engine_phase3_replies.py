@@ -35,6 +35,8 @@ from engine.llm import (
 )
 from engine.llm.classifier import classify_and_draft
 from engine.services import GmailReplyDetector, OperationsService
+from engine.services.reply_detector import TenantMailboxReplyDetector
+from engine.auth.mailbox_models import Mailbox
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +152,8 @@ def test_classify_and_draft_happy_interested():
     assert out.fallback_used is False
     assert out.error is None
     assert out.estimated_cost_cents >= 1
+    assert out.openinference_trace_id is not None
+    assert len(out.openinference_trace_id) == 32
 
 
 def test_classify_and_draft_auto_clears_suggested():
@@ -202,7 +206,7 @@ def test_classify_and_draft_empty_snippet_short_circuits():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _seed_with_sent_email(store, events, ledger, *, thread_id="thread_1"):
+def _seed_with_sent_email(store, events, ledger, *, thread_id="thread_1", tenant_id=None, mailbox_id=None):
     """
     Seed an Engagement with one prospect we already 'sent' to. The detector
     finds the sent thread by reading the EMAIL_SENT event log.
@@ -217,7 +221,7 @@ def _seed_with_sent_email(store, events, ledger, *, thread_id="thread_1"):
         booking_url="https://cal.com/me",
         price_per_outcome_cents=50_000,
     )
-    store.save_engagement(eng)
+    store.save_engagement(eng, tenant_id=tenant_id)
     store.save_agent(Agent(id="a_r", engagement_id=eng.id, runner_kind=OutboundAgentV1.runner_kind))
     prospect = Prospect(
         id="p_r", engagement_id=eng.id,
@@ -235,6 +239,7 @@ def _seed_with_sent_email(store, events, ledger, *, thread_id="thread_1"):
             "via": "gmail",
             "gmail_message_id": "msg_outbound_1",
             "gmail_thread_id": thread_id,
+            **({"mailbox_id": mailbox_id} if mailbox_id else {}),
         },
     ))
     return eng, prospect
@@ -293,6 +298,112 @@ def test_detector_records_one_real_reply_and_drafts(ops_kit, tmp_path):
 
     # LLM cost was debited.
     assert ledger.total_spent_cents(eng.id, category="llm") >= 1
+
+    from engine import EventKind
+    classified_events = list(
+        events.list_recent(
+            engagement_id=eng.id,
+            kind=EventKind.REPLY_CLASSIFIED.value,
+            limit=10,
+        )
+    )
+    assert len(classified_events) == 1
+    trace_id = classified_events[0].payload["openinference_trace_id"]
+    assert trace_id
+    assert len(trace_id) == 32
+    costs = list(ledger.list_recent(eng.id, limit=10))
+    assert any(c.metadata.get("openinference_trace_id") == trace_id for c in costs)
+
+
+def test_detector_filters_threads_by_mailbox_id(ops_kit):
+    store, events, ledger, ops = ops_kit
+    eng, prospect = _seed_with_sent_email(
+        store,
+        events,
+        ledger,
+        thread_id="thread_wrong",
+        mailbox_id="mbx-other",
+    )
+    from engine import Event, EventKind
+    events.emit(Event(
+        id="ev_sent_right", kind=EventKind.EMAIL_SENT,
+        engagement_id=eng.id, agent_id="a_r",
+        job_id="j_sent_right", prospect_id=prospect.id,
+        payload={
+            "to": "ceo@target.com",
+            "via": "gmail",
+            "gmail_message_id": "msg_outbound_right",
+            "gmail_thread_id": "thread_right",
+            "mailbox_id": "mbx-right",
+        },
+    ))
+    fake_gmail = _FakeGmailClient(threads={
+        "thread_right": [
+            _gmail_msg(msg_id="msg_outbound_right", from_addr="me@example.com", subject="s", snippet=""),
+            _gmail_msg(msg_id="msg_inbound_right", from_addr="ceo@target.com", subject="Re: s", snippet="Interested."),
+        ],
+    })
+    detector = GmailReplyDetector(
+        store=store, events=events, ledger=ledger, ops=ops,
+        token_store=_FakeTokenStore(),
+        sender_email="me@example.com",
+        gemini=_FakeGeminiClient({"classification": "interested", "suggested_reply": "thanks"}),
+        gmail_build=lambda creds: fake_gmail,
+        mailbox_id="mbx-right",
+    )
+
+    result = detector.poll(eng.id)
+
+    assert result.replies_recorded == 1
+    assert fake_gmail._last_thread_get_id == "thread_right"
+
+
+def test_tenant_mailbox_reply_detector_uses_connected_mailbox(ops_kit, monkeypatch):
+    store, events, ledger, ops = ops_kit
+    eng, _prospect = _seed_with_sent_email(
+        store,
+        events,
+        ledger,
+        thread_id="thread_tenant",
+        tenant_id="t-replies",
+        mailbox_id="mbx-replies",
+    )
+    store.save_mailbox(Mailbox(
+        id="mbx-replies",
+        tenant_id="t-replies",
+        email_address="seller@example.com",
+        credentials_json={"token": "tok"},
+        status="active",
+    ))
+    fake_gmail = _FakeGmailClient(threads={
+        "thread_tenant": [
+            _gmail_msg(msg_id="msg_outbound_tenant", from_addr="seller@example.com", subject="s", snippet=""),
+            _gmail_msg(msg_id="msg_inbound_tenant", from_addr="ceo@target.com", subject="Re: s", snippet="Interested."),
+        ],
+    })
+
+    class FakeDbTokenStore:
+        def __init__(self, *, store, mailbox_id):
+            self.mailbox_id = mailbox_id
+
+        def load(self):
+            return object()
+
+    monkeypatch.setattr("engine.services.reply_detector.DbTokenStore", FakeDbTokenStore)
+    detector = TenantMailboxReplyDetector(
+        store=store,
+        events=events,
+        ledger=ledger,
+        ops=ops,
+        gemini=_FakeGeminiClient({"classification": "interested", "suggested_reply": "thanks"}),
+        gmail_build_factory=lambda mailbox: (lambda creds: fake_gmail),
+    )
+
+    result = detector.poll(eng.id)
+
+    assert result.replies_recorded == 1
+    assert result.prospects_scanned == 1
+    assert result.errors == []
 
 
 def test_detector_dedupe_via_external_message_id(ops_kit, tmp_path):

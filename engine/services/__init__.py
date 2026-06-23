@@ -14,7 +14,7 @@ Public surface:
 from engine.services.operations import OperationsService  # noqa: F401
 from engine.services.pnl import PnLReport, PnLService  # noqa: F401
 from engine.services.csv_ingest import CsvIngestResult, CsvIngestService  # noqa: F401
-from engine.services.reply_detector import GmailReplyDetector, ReplyDetectionResult  # noqa: F401
+from engine.services.reply_detector import GmailReplyDetector, ReplyDetectionResult, TenantMailboxReplyDetector  # noqa: F401
 from engine.services.reply_actions import ReplyActionExecutor, ReplyActionResult  # noqa: F401
 
 __all__ = [
@@ -24,6 +24,7 @@ __all__ = [
     "CsvIngestService",
     "CsvIngestResult",
     "GmailReplyDetector",
+    "TenantMailboxReplyDetector",
     "ReplyDetectionResult",
     "ReplyActionExecutor",
     "ReplyActionResult",

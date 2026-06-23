@@ -277,6 +277,52 @@ def test_hitl_reject_terminates_job(runtime_and_outbox):
     assert len(console.outbox) == 0
 
 
+def test_execute_due_jobs_can_be_scoped_to_tenant_and_campaign(storage):
+    store, events, ledger = storage
+    console = ConsoleEmailAdapter()
+    rt = EngineRuntime(
+        store=store, events=events, ledger=ledger,
+        adapters=AdapterRegistry([console]),
+        agent_runners={OutboundAgentV1.runner_kind: OutboundAgentV1()},
+    )
+
+    for tenant_id, engagement_id, agent_id, email in (
+        ("t1", "eng_t1", "agent_t1", "one@example.com"),
+        ("t2", "eng_t2", "agent_t2", "two@example.com"),
+    ):
+        store.save_engagement(
+            Engagement(
+                id=engagement_id,
+                customer_name=tenant_id,
+                offer="Offer",
+                icp_description="ICP",
+            ),
+            tenant_id=tenant_id,
+        )
+        store.save_agent(
+            Agent(id=agent_id, engagement_id=engagement_id, runner_kind=OutboundAgentV1.runner_kind),
+            tenant_id=tenant_id,
+        )
+        store.save_job(
+            Job(
+                id=f"job_{tenant_id}",
+                engagement_id=engagement_id,
+                agent_id=agent_id,
+                kind=JobKind.EMAIL_SEND,
+                payload={
+                    "to_email": email,
+                    "subject_template": "Hello",
+                    "body_template": "Hi",
+                },
+            )
+        )
+
+    assert rt.execute_due_jobs(tenant_id="t1", engagement_id="eng_t1") == 1
+    assert [m["to"] for m in console.outbox] == ["one@example.com"]
+    assert store.get_job("job_t1").state == JobState.SUCCEEDED.value
+    assert store.get_job("job_t2").state == JobState.PENDING.value
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Retry / dead-letter
 # ─────────────────────────────────────────────────────────────────────────────

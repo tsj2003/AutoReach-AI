@@ -29,6 +29,7 @@ def dashboard(
         "total_margin_cents": 0,
         "total_booked": 0,
         "total_qualified": 0,
+        "cost_by_category_cents": {},
     }
     campaign_summaries = []
     for eng in engagements:
@@ -39,11 +40,20 @@ def dashboard(
             totals["total_margin_cents"] += report.margin_cents
             totals["total_booked"] += report.booked_count
             totals["total_qualified"] += report.qualified_count
+            for category, amount_cents in report.cost_by_category_cents.items():
+                totals["cost_by_category_cents"][category] = (
+                    totals["cost_by_category_cents"].get(category, 0) + amount_cents
+                )
         campaign_summaries.append({
             "id": eng.id,
             "name": eng.customer_name,
             "status": eng.status,
             "revenue_cents": report.revenue_cents if report else 0,
+            "cost_cents": report.cost_cents if report else 0,
+            "margin_cents": report.margin_cents if report else 0,
+            "cost_per_qualified_outcome_cents": (
+                report.cost_per_qualified_outcome_cents if report else None
+            ),
             "qualified": report.qualified_count if report else 0,
         })
 

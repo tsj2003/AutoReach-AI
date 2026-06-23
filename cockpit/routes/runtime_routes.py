@@ -18,14 +18,14 @@ router = APIRouter()
 @router.post("/engagements/{engagement_id}/tick")
 def tick(request: Request, engagement_id: str):
     runtime = request.app.state.runtime
-    runtime.tick()
+    runtime.tick(engagement_id=engagement_id)
     return RedirectResponse(url=f"/engagements/{engagement_id}", status_code=303)
 
 
 @router.post("/engagements/{engagement_id}/drain")
 def drain(request: Request, engagement_id: str):
     runtime = request.app.state.runtime
-    runtime.run_once(max_iters=20)
+    runtime.run_once(max_iters=20, engagement_id=engagement_id)
     return RedirectResponse(url=f"/engagements/{engagement_id}", status_code=303)
 
 
@@ -39,7 +39,7 @@ def poll_replies(request: Request, engagement_id: str):
     if detector is None:
         raise HTTPException(
             400,
-            "reply detector not configured. Set AUTOREACH_GMAIL_TOKEN_PATH + AUTOREACH_GMAIL_SENDER + GEMINI_API_KEY.",
+            "reply detector not configured. Connect a tenant mailbox or set AUTOREACH_GMAIL_TOKEN_PATH + AUTOREACH_GMAIL_SENDER + GEMINI_API_KEY for the legacy console.",
         )
     result = detector.poll(engagement_id)
     request.app.state.last_poll_result = {
@@ -63,7 +63,7 @@ def approve(request: Request, job_id: str):
     job = request.app.state.store.get_job(job_id)
     if job is None:
         raise HTTPException(404, "job not found")
-    runtime.approve_job(job_id)
+    runtime.approve_job(job_id, engagement_id=job.engagement_id)
     return RedirectResponse(url=f"/engagements/{job.engagement_id}", status_code=303)
 
 
@@ -77,5 +77,5 @@ def reject(
     job = request.app.state.store.get_job(job_id)
     if job is None:
         raise HTTPException(404, "job not found")
-    runtime.reject_job(job_id, reason=reason)
+    runtime.reject_job(job_id, reason=reason, engagement_id=job.engagement_id)
     return RedirectResponse(url=f"/engagements/{job.engagement_id}", status_code=303)

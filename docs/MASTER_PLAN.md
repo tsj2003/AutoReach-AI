@@ -16,7 +16,7 @@
 | Phase 3b | Real Gmail send adapter + `JsonFileTokenStore` + dry-run + error classification | ✅ Done (75 tests) |
 | Phase 3c | Gmail reply detection + Gemini classifier + cockpit poll button | ✅ Done (91 tests) |
 
-**Current baseline: 102 tests passing.**
+**Current baseline: 339 tests passing.**
 
 ---
 
@@ -469,7 +469,7 @@ Files to create:
 | M4 | DB OAuth mailboxes | ✅ Done | 153 |
 | M9 | Mailbox health + warmup | ✅ Done | 160 |
 
-**Current: 160 tests passing. Full SaaS stack verified end-to-end via `scripts/e2e_saas_smoke.py`.**
+**Current: 339 tests passing. Full SaaS stack verified end-to-end via `scripts/e2e_saas_smoke.py`, live deploy smoke tooling via `scripts/production_smoke.py`, and live-ops launch planning via `scripts/live_ops_launch.py`.**
 
 ## ALL MILESTONES COMPLETE (M1–M13)
 

@@ -144,7 +144,7 @@ def cmd_prospect_add(args: argparse.Namespace) -> int:
 
 def cmd_tick(args: argparse.Namespace) -> int:
     runtime, console, _ = _runtime(args.db)
-    result = runtime.tick()
+    result = runtime.tick(engagement_id=args.engagement)
     _print(
         {
             "ok": True,
@@ -158,7 +158,7 @@ def cmd_tick(args: argparse.Namespace) -> int:
 
 def cmd_drain(args: argparse.Namespace) -> int:
     runtime, console, _ = _runtime(args.db)
-    result = runtime.run_once(max_iters=args.max_iters)
+    result = runtime.run_once(max_iters=args.max_iters, engagement_id=args.engagement)
     _print(
         {
             "ok": True,
@@ -265,10 +265,12 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_prospect_add)
 
     sp = sub.add_parser("tick", help="run one plan + execute cycle")
+    sp.add_argument("--engagement", default=None, help="optional engagement scope")
     sp.set_defaults(func=cmd_tick)
 
     sp = sub.add_parser("drain", help="run until quiescent")
     sp.add_argument("--max-iters", type=int, default=50)
+    sp.add_argument("--engagement", default=None, help="optional engagement scope")
     sp.set_defaults(func=cmd_drain)
 
     sp = sub.add_parser("approve", help="approve a job awaiting HITL approval")

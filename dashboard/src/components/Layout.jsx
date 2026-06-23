@@ -7,6 +7,7 @@ export default function Layout() {
   const nav = [
     { to: "/", label: "Dashboard" },
     { to: "/campaigns", label: "Campaigns" },
+    { to: "/operations", label: "Operations" },
     { to: "/billing", label: "Billing" },
   ];
   return (
@@ -20,7 +21,7 @@ export default function Layout() {
             <Link
               key={n.to}
               to={n.to}
-              className={loc.pathname === n.to ? "active" : ""}
+              className={loc.pathname === n.to || loc.pathname.startsWith(`${n.to}/`) ? "active" : ""}
             >
               {n.label}
             </Link>

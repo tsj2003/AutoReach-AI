@@ -15,6 +15,7 @@ POST   /api/campaigns/{id}/reject-job/{job_id}
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,6 +34,8 @@ class CampaignCreate(BaseModel):
     customer_name: str
     offer: str
     icp_description: str
+    client_cure: Optional[str] = None
+    allowed_signal_types: list[str] = []
     booking_url: Optional[str] = None
     monthly_meeting_target: Optional[int] = None
     price_per_outcome_cents: Optional[int] = None
@@ -46,6 +49,8 @@ class CampaignPatch(BaseModel):
     customer_name: Optional[str] = None
     offer: Optional[str] = None
     icp_description: Optional[str] = None
+    client_cure: Optional[str] = None
+    allowed_signal_types: Optional[list[str]] = None
     booking_url: Optional[str] = None
     status: Optional[str] = None
     monthly_meeting_target: Optional[int] = None
@@ -54,9 +59,15 @@ class CampaignPatch(BaseModel):
 
 
 def _eng_to_dict(eng, report=None):
+    metadata = dict(getattr(eng, "metadata", {}) or {})
+    signal_matrix = dict(metadata.get("signal_matrix") or {})
     d = {
         "id": eng.id, "customer_name": eng.customer_name,
         "offer": eng.offer, "icp_description": eng.icp_description,
+        "client_cure": metadata.get("client_cure", ""),
+        "signal_matrix": signal_matrix,
+        "allowed_signal_types": signal_matrix.get("allowed_signal_types", []),
+        "deliverability_preflight": metadata.get("deliverability_preflight", {}),
         "booking_url": eng.booking_url, "status": eng.status,
         "monthly_meeting_target": eng.monthly_meeting_target,
         "price_per_outcome_cents": eng.price_per_outcome_cents,
@@ -69,6 +80,12 @@ def _eng_to_dict(eng, report=None):
             "cost_cents": report.cost_cents,
             "margin_cents": report.margin_cents,
             "margin_pct": report.margin_pct,
+            "cost_by_category_cents": report.cost_by_category_cents,
+            "cost_per_qualified_outcome_cents": report.cost_per_qualified_outcome_cents,
+            "profit_per_qualified_outcome_cents": report.profit_per_qualified_outcome_cents,
+            "budget_remaining_cents": report.budget_remaining_cents,
+            "budget_spent_pct": report.budget_spent_pct,
+            "over_budget": report.over_budget,
             "booked_count": report.booked_count,
             "qualified_count": report.qualified_count,
         }
@@ -114,6 +131,7 @@ def create_campaign(
         price_per_outcome_cents=body.price_per_outcome_cents,
         monthly_budget_cents=body.monthly_budget_cents,
     )
+    eng = replace(eng, metadata=_campaign_metadata(body))
     store.save_engagement(eng, tenant_id=current_user.tenant_id)
 
     ops.create_agent(
@@ -174,6 +192,7 @@ def patch_campaign(
     if not eng:
         raise HTTPException(404, "Campaign not found")
     from engine.core.types import Engagement as _Eng
+    metadata = _patched_campaign_metadata(eng.metadata, body)
     updated = _Eng(
         id=eng.id,
         customer_name=body.customer_name or eng.customer_name,
@@ -186,10 +205,52 @@ def patch_campaign(
         monthly_budget_cents=body.monthly_budget_cents if body.monthly_budget_cents is not None else eng.monthly_budget_cents,
         status=body.status or eng.status,
         created_at=eng.created_at,
-        metadata=eng.metadata,
+        metadata=metadata,
     )
     store.save_engagement(updated, tenant_id=current_user.tenant_id)
     return _eng_to_dict(updated)
+
+
+def _normalize_signal_types(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        signal_type = str(value).strip()
+        if not signal_type or signal_type in seen:
+            continue
+        seen.add(signal_type)
+        normalized.append(signal_type)
+    return normalized
+
+
+def _campaign_metadata(body: CampaignCreate) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    client_cure = (body.client_cure or "").strip()
+    if client_cure:
+        metadata["client_cure"] = client_cure
+    allowed = _normalize_signal_types(body.allowed_signal_types)
+    if allowed:
+        metadata["signal_matrix"] = {"allowed_signal_types": allowed}
+    return metadata
+
+
+def _patched_campaign_metadata(existing: Any, body: CampaignPatch) -> dict[str, Any]:
+    metadata = dict(existing or {})
+    if body.client_cure is not None:
+        client_cure = body.client_cure.strip()
+        if client_cure:
+            metadata["client_cure"] = client_cure
+        else:
+            metadata.pop("client_cure", None)
+    if body.allowed_signal_types is not None:
+        allowed = _normalize_signal_types(body.allowed_signal_types)
+        if allowed:
+            metadata["signal_matrix"] = {"allowed_signal_types": allowed}
+        else:
+            metadata.pop("signal_matrix", None)
+    return metadata
 
 
 @router.delete("/{campaign_id}", status_code=204)
@@ -222,7 +283,10 @@ def tick_campaign(
 ):
     if not store.get_engagement(campaign_id, tenant_id=current_user.tenant_id):
         raise HTTPException(404, "Campaign not found")
-    result = runtime.tick()
+    result = runtime.tick(
+        tenant_id=current_user.tenant_id,
+        engagement_id=campaign_id,
+    )
     return {"ok": True, "result": result}
 
 
@@ -235,7 +299,11 @@ def drain_campaign(
 ):
     if not store.get_engagement(campaign_id, tenant_id=current_user.tenant_id):
         raise HTTPException(404, "Campaign not found")
-    result = runtime.run_once(max_iters=20)
+    result = runtime.run_once(
+        max_iters=20,
+        tenant_id=current_user.tenant_id,
+        engagement_id=campaign_id,
+    )
     return {"ok": True, "result": result}
 
 
@@ -271,7 +339,11 @@ def approve_job(
 ):
     if not store.get_engagement(campaign_id, tenant_id=current_user.tenant_id):
         raise HTTPException(404, "Campaign not found")
-    ok = runtime.approve_job(job_id)
+    ok = runtime.approve_job(
+        job_id,
+        tenant_id=current_user.tenant_id,
+        engagement_id=campaign_id,
+    )
     if not ok:
         raise HTTPException(400, "Job not found or not awaiting approval")
     return {"ok": True}
@@ -287,7 +359,12 @@ def reject_job(
 ):
     if not store.get_engagement(campaign_id, tenant_id=current_user.tenant_id):
         raise HTTPException(404, "Campaign not found")
-    ok = runtime.reject_job(job_id, reason="rejected via API")
+    ok = runtime.reject_job(
+        job_id,
+        reason="rejected via API",
+        tenant_id=current_user.tenant_id,
+        engagement_id=campaign_id,
+    )
     if not ok:
         raise HTTPException(400, "Job not found or not awaiting approval")
     return {"ok": True}

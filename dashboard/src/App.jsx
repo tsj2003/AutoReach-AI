@@ -10,6 +10,8 @@ import CampaignDetail from "./pages/CampaignDetail.jsx";
 import Contacts from "./pages/Contacts.jsx";
 import Inbox from "./pages/Inbox.jsx";
 import Billing from "./pages/Billing.jsx";
+import Operations from "./pages/Operations.jsx";
+import OperationsOnboarding from "./pages/OperationsOnboarding.jsx";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -37,6 +39,8 @@ export default function App() {
         <Route path="campaigns/:id" element={<CampaignDetail />} />
         <Route path="campaigns/:id/contacts" element={<Contacts />} />
         <Route path="campaigns/:id/inbox" element={<Inbox />} />
+        <Route path="operations" element={<Operations />} />
+        <Route path="operations/onboarding" element={<OperationsOnboarding />} />
         <Route path="billing" element={<Billing />} />
       </Route>
     </Routes>

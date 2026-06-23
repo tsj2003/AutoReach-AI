@@ -31,6 +31,8 @@ Tarandeep_Resume_SDE.pdf
 # Local databases
 # ─────────────────────────────────────────────────────────────
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 autoreach_saas.db
@@ -75,6 +77,9 @@ dashboard/dist/
 node_modules/
 dist/
 build/
+dashboard/playwright-report/
+dashboard/test-results/
+tmp/
 
 # ─────────────────────────────────────────────────────────────
 # IDE / OS

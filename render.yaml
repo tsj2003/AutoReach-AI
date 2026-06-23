@@ -25,9 +25,15 @@ services:
         generateValue: true
       - key: AUTOREACH_SESSION_SECRET
         generateValue: true
+      - key: AUTOREACH_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
       # Legacy operator console is unauthenticated — keep it OFF in production.
       - key: AUTOREACH_ENABLE_CONSOLE
         value: "0"
+      - key: AUTOREACH_RUNTIME_SMART_DISPATCH
+        value: "1"
+      - key: AUTOREACH_PUBLIC_BASE_URL
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID
@@ -44,6 +50,14 @@ services:
         value: "INR"
       - key: CALCOM_WEBHOOK_SECRET
         sync: false
+      - key: AUTOREACH_PHOENIX_ENDPOINT
+        sync: false
+      - key: AUTOREACH_INTENT_DUCKDB_PATH
+        sync: false
+      - key: AUTOREACH_INTENT_HOURS_BACK
+        value: "24"
+      - key: AUTOREACH_WORKER_QUEUES
+        value: "engine,maintenance,standard-agents"
       - key: SENTRY_DSN
         sync: false
 
@@ -52,7 +66,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: celery -A celery_worker.celery_app worker --loglevel=info --concurrency=2 -Q engine,maintenance
+    startCommand: celery -A celery_worker.celery_app worker --loglevel=info --concurrency=2 -Q engine,maintenance,standard-agents
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -65,8 +79,20 @@ services:
           property: connectionString
       - key: AUTOREACH_JWT_SECRET
         sync: false
+      - key: AUTOREACH_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: AUTOREACH_RUNTIME_SMART_DISPATCH
+        value: "1"
       - key: GEMINI_API_KEY
         sync: false
+      - key: AUTOREACH_PHOENIX_ENDPOINT
+        sync: false
+      - key: AUTOREACH_INTENT_DUCKDB_PATH
+        sync: false
+      - key: AUTOREACH_INTENT_HOURS_BACK
+        value: "24"
+      - key: AUTOREACH_WORKER_QUEUES
+        value: "engine,maintenance,standard-agents"
 
   - type: worker
     name: autoreach-beat
@@ -84,6 +110,8 @@ services:
           name: autoreach-redis
           type: redis
           property: connectionString
+      - key: AUTOREACH_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
 
   - type: redis
     name: autoreach-redis

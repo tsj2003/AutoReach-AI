@@ -10,6 +10,7 @@ Usage:
 """
 
 import base64
+import argparse
 import csv
 import json
 import os
@@ -30,10 +31,24 @@ from googleapiclient.discovery import build
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token.json")
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "newlit.csv")
 RESUME_PATH = os.path.join(os.path.dirname(__file__), "..", "Tarandeep_Resume_AI (1).pdf")
-SENDER = "tarandeepjuneja11@gmail.com"
+SENDER = os.getenv("AUTOREACH_GMAIL_SENDER", "")
 LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "send_log.csv")
+ALLOW_LEGACY_DIRECT_SEND_ENV = "AUTOREACH_ALLOW_LEGACY_DIRECT_SEND"
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_live_send_escape_hatch() -> None:
+    if not _env_flag(ALLOW_LEGACY_DIRECT_SEND_ENV):
+        raise SystemExit(
+            f"Live direct Gmail sending is disabled. Set {ALLOW_LEGACY_DIRECT_SEND_ENV}=1 "
+            "only for an intentional one-off operator run. Production sends should "
+            "flow through tenant mailboxes and the smart dispatch router."
+        )
 
 
 def load_creds():
@@ -158,10 +173,31 @@ def log_result(email, company, status, message_id="", error=""):
         ])
 
 
-def main():
+def main(argv=None):
+    global CSV_PATH, RESUME_PATH, TOKEN_PATH, SENDER
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--live", action="store_true", help="send real Gmail messages")
+    parser.add_argument("--csv", default=os.getenv("AUTOREACH_DIRECT_CSV", CSV_PATH))
+    parser.add_argument("--resume", default=os.getenv("AUTOREACH_DIRECT_RESUME_PATH", RESUME_PATH))
+    parser.add_argument("--token-path", default=os.getenv("AUTOREACH_GMAIL_TOKEN_PATH", TOKEN_PATH))
+    parser.add_argument("--sender-email", default=SENDER)
+    args = parser.parse_args(argv)
+
+    CSV_PATH = args.csv
+    RESUME_PATH = args.resume
+    TOKEN_PATH = args.token_path
+    SENDER = args.sender_email
+
     print("=" * 60)
     print("📧 DIRECT GMAIL SENDER — AutoReach HR Outreach")
     print("=" * 60)
+    if not args.live:
+        print("[!] DRY-RUN MODE: no Gmail API send calls will be made.")
+    else:
+        _require_live_send_escape_hatch()
+        if not SENDER:
+            raise SystemExit("Live mode requires --sender-email or AUTOREACH_GMAIL_SENDER.")
 
     # Load contacts
     contacts = load_contacts()
@@ -178,6 +214,14 @@ def main():
 
     if not to_send:
         print("[+] All emails already sent!")
+        return
+
+    if not args.live:
+        print("[+] First dry-run drafts:")
+        for contact in to_send[:3]:
+            _, subject = build_email(contact["Email"], contact["Company"] or "your company", RESUME_PATH)
+            print(f"  To: {contact['Email']} | Subject: {subject}")
+        print(f"[!] To live-send, rerun with --live and {ALLOW_LEGACY_DIRECT_SEND_ENV}=1.")
         return
 
     # Load credentials and build Gmail service

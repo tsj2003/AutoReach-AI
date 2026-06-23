@@ -58,6 +58,44 @@ def test_signup_creates_tenant_and_returns_jwt(client):
     assert body["plan"] == "pro"
 
 
+def test_signup_fails_closed_without_jwt_secret_in_production_like_env(tmp_path, monkeypatch):
+    from cockpit import create_app
+
+    monkeypatch.delenv("AUTOREACH_JWT_SECRET", raising=False)
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db/autoreach")
+    app = create_app(db_url=f"sqlite:///{tmp_path / 'prod_auth_missing_secret.db'}")
+    prod_client = TestClient(app, raise_server_exceptions=True)
+
+    r = prod_client.post("/api/auth/signup", json={
+        "email": "prod@example.com",
+        "password": "Password1!",
+        "company_name": "Prod Co",
+    })
+
+    assert r.status_code == 503
+    assert "JWT signing secret" in r.text
+
+
+def test_signup_rejects_dev_jwt_secret_in_production_like_env(tmp_path, monkeypatch):
+    from cockpit import create_app
+
+    monkeypatch.setenv("AUTOREACH_JWT_SECRET", "CHANGE_ME_SET_AUTOREACH_JWT_SECRET_IN_ENV")
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db/autoreach")
+    app = create_app(db_url=f"sqlite:///{tmp_path / 'prod_auth_dev_secret.db'}")
+    prod_client = TestClient(app, raise_server_exceptions=True)
+
+    r = prod_client.post("/api/auth/signup", json={
+        "email": "prod-dev@example.com",
+        "password": "Password1!",
+        "company_name": "Prod Co",
+    })
+
+    assert r.status_code == 503
+    assert "JWT signing secret" in r.text
+
+
 def test_signup_duplicate_email_returns_409(client):
     payload = {"email": "dup@example.com", "password": "Password1!"}
     client.post("/api/auth/signup", json=payload)
@@ -202,6 +240,35 @@ def test_campaign_create_list_get(auth_client):
     assert body["agents"]          # default agent created
     assert "pnl" in body
     assert "events" in body
+
+
+def test_campaign_create_persists_client_cure_and_signal_matrix(auth_client):
+    client, tokens = auth_client
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    r = client.post("/api/campaigns", json={
+        "customer_name": "Intent Co",
+        "offer": "O",
+        "icp_description": "I",
+        "client_cure": "Fixes outbound teams missing fresh funding triggers.",
+        "allowed_signal_types": ["funding_round", "job_posting", "funding_round"],
+        "monthly_budget_cents": 100000,
+    }, headers=h)
+
+    assert r.status_code == 201
+    created = r.json()
+    assert created["client_cure"] == "Fixes outbound teams missing fresh funding triggers."
+    assert created["allowed_signal_types"] == ["funding_round", "job_posting"]
+
+    fetched = client.get(f"/api/campaigns/{created['id']}", headers=h).json()
+    assert fetched["signal_matrix"]["allowed_signal_types"] == ["funding_round", "job_posting"]
+
+    patched = client.patch(
+        f"/api/campaigns/{created['id']}",
+        json={"allowed_signal_types": ["tech_stack_change"]},
+        headers=h,
+    ).json()
+    assert patched["allowed_signal_types"] == ["tech_stack_change"]
 
 
 def test_campaign_patch(auth_client):

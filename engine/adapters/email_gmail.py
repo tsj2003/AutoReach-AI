@@ -210,6 +210,8 @@ class GmailEmailAdapter:
                 payload={
                     "to": to_email,
                     "via": "gmail",
+                    "mailbox_id": p.get("mailbox_id"),
+                    "sender_email": self._sender_email,
                     "gmail_message_id": message_id,
                     "gmail_thread_id": thread_id,
                 },

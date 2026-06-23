@@ -116,7 +116,7 @@ Either gate failing, the prospect is dropped. No exceptions.
 
 ### Concrete consequences
 
-- **Engagement schema must include `client_cure: str` and `signal_matrix: structured`.** A faked or generic cure will degrade the whole pipeline. We will refuse to ingest prospects until the cure is filled.
+- **Engagement metadata must include `client_cure: str` and `signal_matrix: structured`.** The Cockpit campaign API now persists these in `Engagement.metadata`, and the launch checklist refuses to activate campaigns until both are filled. A faked or generic cure will degrade the whole pipeline.
 - **The audit adapter is not free-form.** It runs the cure's matrix or it doesn't run.
 - **The cockpit shows the matched signal next to every email draft.** If the operator can't see "matched: Kafka in job posting + ClickHouse in OSS PRs" in the UI, the email doesn't go.
 - **Negative training is recorded.** When a prospect replies "we don't have that problem," we record the signals that produced the false positive, and use them to tighten the matrix for that cure.

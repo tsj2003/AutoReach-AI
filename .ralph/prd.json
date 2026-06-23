@@ -1,0 +1,480 @@
+{
+  "project": "AutoReach-AI",
+  "branchName": "ralph/pilot-ready-oaas-console",
+  "description": "Pilot-Ready OaaS Console - make AutoReach usable by an internal operator for the first 10 high-ACV customers without unsafe self-serve controls.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Deliverability-gated tenant onboarding",
+      "description": "As an operator, I want pilot tenants registered only after sender DNS is checked so that unsafe customers cannot start outreach.",
+      "acceptanceCriteria": [
+        "Operator can register a pilot tenant with budget, meeting price, LinkedIn, and MCP config.",
+        "Backend verifies SPF and DMARC before returning ACTIVE.",
+        "Unsafe tenants are saved as PENDING_REMEDIATION.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented and verified in this repo; false keeps the file valid as a fresh Ralph execution input."
+    },
+    {
+      "id": "US-002",
+      "title": "Operator onboarding UI",
+      "description": "As an operator, I want a Cockpit onboarding page so that pilot setup happens through the product surface.",
+      "acceptanceCriteria": [
+        "Cockpit has an operations page for creating pilot tenants.",
+        "Page shows preflight failures clearly and preserves the submitted economics.",
+        "Verify in browser using dev-browser skill.",
+        "Typecheck passes."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Implemented and production bundle builds."
+    },
+    {
+      "id": "US-003",
+      "title": "Pilot campaign launch checklist",
+      "description": "As an operator, I want campaigns blocked until launch checks pass so that unsafe outreach cannot start.",
+      "acceptanceCriteria": [
+        "Campaigns cannot activate without mailbox, DNS, budget, signal matrix, and approval queue checks.",
+        "Activation returns conflict when checks fail.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Implemented and covered by operations launch checklist tests."
+    },
+    {
+      "id": "US-004",
+      "title": "Daily operator mission control",
+      "description": "As an operator, I want one daily control room so that I can spot pending approvals, launch blockers, meetings, and budget risk.",
+      "acceptanceCriteria": [
+        "Mission control returns tenant-scoped campaign counts.",
+        "Mission control returns blocked launches, pending approvals, booked meetings, budget risks, and mailbox counts.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Implemented and exposed in Cockpit operations."
+    },
+    {
+      "id": "US-005",
+      "title": "Customer proof package",
+      "description": "As an operator, I want a trace-backed ROI package so that I can prove campaign value to pilot customers.",
+      "acceptanceCriteria": [
+        "Proof package includes COGS, revenue, margin, trace IDs, outcomes, and recent events.",
+        "Proof package is tenant-scoped.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Implemented and surfaced from the campaign dashboard."
+    },
+    {
+      "id": "US-006",
+      "title": "Production readiness gate",
+      "description": "As an operator, I want production configuration checked before paid pilots so that missing infrastructure is caught early.",
+      "acceptanceCriteria": [
+        "Readiness checks required secrets and services.",
+        "Web and worker initialize Phoenix telemetry from environment configuration.",
+        "Render worker consumes engine, maintenance, and standard-agents queues.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Implemented with /readyz and Cockpit operations readiness."
+    },
+    {
+      "id": "US-007",
+      "title": "Pre-pilot E2E smoke command",
+      "description": "As an operator, I want one local smoke command so that I can verify the SaaS loop before a customer demo.",
+      "acceptanceCriteria": [
+        "Smoke command covers signup, campaign creation, readiness, launch checklist, HITL approval, reply, meeting qualification, analytics, mission control, proof package, tenant isolation, and SPA serving.",
+        "Smoke command exits 0 when the stack works.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Implemented in scripts/e2e_saas_smoke.py."
+    },
+    {
+      "id": "US-008",
+      "title": "Deploy readiness probe",
+      "description": "As an operator, I want a safe readiness endpoint so that uptime monitors can distinguish liveness from production readiness.",
+      "acceptanceCriteria": [
+        "/healthz remains liveness.",
+        "/readyz exposes safe production readiness summary.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Implemented and covered by production wiring tests."
+    },
+    {
+      "id": "US-009",
+      "title": "First-class cure and signal matrix configuration",
+      "description": "As an operator, I want client cure and signal matrix fields in Cockpit so that launch readiness does not require database edits.",
+      "acceptanceCriteria": [
+        "Campaign API captures client_cure and allowed_signal_types.",
+        "Cockpit UI captures client cure and allowed intent signal types.",
+        "Launch checklist enforces both.",
+        "Verify in browser using dev-browser skill.",
+        "Typecheck passes."
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Implemented and production bundle builds."
+    },
+    {
+      "id": "US-010",
+      "title": "Campaign DNS preflight through product APIs",
+      "description": "As an operator, I want to run DNS preflight from the campaign page so that launch readiness uses product APIs instead of direct store edits.",
+      "acceptanceCriteria": [
+        "Operations API runs campaign-level SPF and DMARC preflight.",
+        "API persists the tenant-scoped preflight result into campaign metadata.",
+        "Campaign page includes a sending-domain field and preflight action.",
+        "Launch checklist consumes the persisted result.",
+        "Verify in browser using dev-browser skill.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Implemented in this slice; tests and production dashboard build pass."
+    },
+    {
+      "id": "US-011",
+      "title": "Deep production dependency readiness",
+      "description": "As an operator, I want readiness to prove database, Redis, and Celery worker connectivity so that paid pilots do not start on broken infrastructure.",
+      "acceptanceCriteria": [
+        "/readyz?deep=true runs live database, Redis, and Celery worker queue probes.",
+        "Operations readiness panel requests deep readiness.",
+        "App factory defaults to DATABASE_URL before AUTOREACH_DB.",
+        "Probe details do not expose connection strings, passwords, API keys, or secret values.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Implemented in this slice; readiness tests and production wiring tests pass."
+    },
+    {
+      "id": "US-012",
+      "title": "Live deployed production smoke gate",
+      "description": "As an operator, I want one command to validate a deployed AutoReach URL so that production pilot readiness is proven outside the local test harness.",
+      "acceptanceCriteria": [
+        "Smoke command checks /healthz, /readyz, and /readyz?deep=true.",
+        "Smoke command signs up or logs in a smoke user and verifies /api/auth/me.",
+        "Smoke command checks authenticated Operations deep readiness.",
+        "Smoke command verifies the React SPA is served at /app/.",
+        "Smoke command fails if configured secret denylist values appear in responses.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Implemented in scripts/production_smoke.py with hermetic launch-script tests."
+    },
+    {
+      "id": "US-013",
+      "title": "Public attack-surface deploy gate",
+      "description": "As an operator, I want the live deploy smoke to prove unsafe public surfaces are closed so that the pilot deployment does not expose unauthenticated admin tooling or API schemas.",
+      "acceptanceCriteria": [
+        "Production smoke fails if /engagements is publicly reachable.",
+        "Production smoke fails if /docs, /redoc, or /openapi.json are publicly reachable.",
+        "Production smoke fails if /api/operations/readiness is reachable without authentication.",
+        "FastAPI app disables the public OpenAPI schema endpoint.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Implemented in scripts/production_smoke.py and cockpit/app.py with launch and console-gating tests."
+    },
+    {
+      "id": "US-014",
+      "title": "Health-gated approved email dispatch",
+      "description": "As an operator, I want approved outbox jobs to send only through healthy tenant mailboxes so that paid pilot outreach cannot silently use console mode or burned inboxes.",
+      "acceptanceCriteria": [
+        "Approved HITL outbox jobs enqueue a registered Celery task on standard-agents.",
+        "The dispatch task selects a healthy mailbox through SmartInboxRouter.",
+        "The provider uses the DB-token-backed Gmail adapter for the selected mailbox.",
+        "Dispatch fails closed when no healthy mailbox is available.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Implemented in engine.tasks, engine.dispatch.provider, and engine.dispatch.router; 339 project tests pass."
+    },
+    {
+      "id": "US-015",
+      "title": "Smart runtime email dispatch for legacy campaign jobs",
+      "description": "As an operator, I want legacy EngineRuntime email jobs to use the same health-gated tenant mailbox router in production so that no approval path bypasses deliverability safety.",
+      "acceptanceCriteria": [
+        "AUTOREACH_RUNTIME_SMART_DISPATCH=1 switches EngineRuntime email jobs to the smart routed adapter.",
+        "The smart adapter resolves tenant ownership from storage.",
+        "Production readiness fails when the flag is not enabled.",
+        "Local smoke verifies the smart path with a stubbed provider.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Implemented in engine.dispatch.adapter, cockpit/app.py, engine.worker.celery_app, and readiness checks; 339 project tests pass."
+    },
+    {
+      "id": "US-016",
+      "title": "Engagement-scoped Celery ticks",
+      "description": "As an operator, I want campaign-scoped worker tasks to tick only the requested engagement so that one tenant's work cannot trigger global campaign execution.",
+      "acceptanceCriteria": [
+        "engine.tick_engagement calls runtime.tick with the requested engagement_id.",
+        "The task no longer runs a global tick for engagement-scoped work.",
+        "A production wiring test covers the scoped call.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Implemented in engine.worker.celery_app; 339 project tests pass."
+    },
+    {
+      "id": "US-017",
+      "title": "Tenant-mailbox Gmail reply polling",
+      "description": "As an operator, I want reply polling to use connected tenant mailboxes so that smart-dispatch pilots can ingest replies without old global Gmail token files.",
+      "acceptanceCriteria": [
+        "Smart-dispatch app instances build a tenant mailbox reply detector.",
+        "Celery poll_replies uses the tenant mailbox detector when smart dispatch is enabled.",
+        "Reply polling authenticates per mailbox using DbTokenStore.",
+        "Gmail thread lookup is filtered by mailbox_id.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Implemented in engine.services.reply_detector, cockpit/app.py, and engine.worker.celery_app; 339 project tests pass."
+    },
+    {
+      "id": "US-018",
+      "title": "Legacy bypass hardening",
+      "description": "As an operator, I want legacy manual controls and one-off scripts guarded so that paid pilots cannot accidentally bypass tenant-scoped smart dispatch.",
+      "acceptanceCriteria": [
+        "Legacy console tick and drain routes call the runtime with the current engagement_id.",
+        "The engine CLI supports optional engagement-scoped tick and drain commands.",
+        "One-off direct Gmail scripts require AUTOREACH_ALLOW_LEGACY_DIRECT_SEND=1 before live sending.",
+        "One-off direct Gmail scripts do not hardcode personal sender or token paths.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Implemented in cockpit.routes.runtime_routes, engine.__main__, and legacy direct-send scripts; 339 project tests pass."
+    },
+    {
+      "id": "US-019",
+      "title": "Legacy global OAuth closure",
+      "description": "As an operator, I want legacy token-file OAuth closed in production so that paid pilots use tenant-scoped mailbox connections only.",
+      "acceptanceCriteria": [
+        "Legacy /oauth/google/start and /oauth/status routes are not mounted when AUTOREACH_ENABLE_CONSOLE=0 by default.",
+        "JWT-protected /api/mailboxes routes remain available for tenant mailbox connection.",
+        "The production smoke command fails if legacy global OAuth routes are publicly reachable.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Implemented in cockpit.app and scripts.production_smoke; 339 project tests pass."
+    },
+    {
+      "id": "US-020",
+      "title": "Production-required booking webhook signatures",
+      "description": "As an operator, I want booking webhooks authenticated in production so that public webhook endpoints cannot forge meetings or revenue outcomes.",
+      "acceptanceCriteria": [
+        "Cal.com webhooks fail closed in production mode when CALCOM_WEBHOOK_SECRET is missing.",
+        "Invalid Cal.com webhook signatures are rejected before payload processing.",
+        "Correctly signed Cal.com webhook payloads continue to be acknowledged.",
+        "Production readiness treats CALCOM_WEBHOOK_SECRET as required.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Implemented in cockpit.routes.webhooks and cockpit.services.readiness; 339 project tests pass."
+    },
+    {
+      "id": "US-021",
+      "title": "Mailbox credential encryption at rest",
+      "description": "As an operator, I want mailbox OAuth secrets encrypted at rest so that a database leak does not expose customer Gmail credentials in plaintext.",
+      "acceptanceCriteria": [
+        "Mailbox credential JSON blobs are encrypted before storage when AUTOREACH_CREDENTIAL_ENCRYPTION_KEY is configured.",
+        "Mailbox OAuth client secrets are encrypted before storage when AUTOREACH_CREDENTIAL_ENCRYPTION_KEY is configured.",
+        "Existing plaintext development rows remain readable for backward compatibility.",
+        "Production readiness requires a valid Fernet credential encryption key.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Implemented in engine.security.secrets and engine.storage.sqlite; 339 project tests pass."
+    },
+    {
+      "id": "US-022",
+      "title": "Unsigned booking webhook live deploy probe",
+      "description": "As an operator, I want the live production smoke command to prove public booking webhooks reject unsigned payloads on the deployed URL.",
+      "acceptanceCriteria": [
+        "Production smoke sends an unsigned Cal.com booking payload to the deployed webhook URL.",
+        "Production smoke fails if the webhook accepts the unsigned payload.",
+        "Production smoke fails if the webhook response leaks configured secret denylist values.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Implemented in scripts.production_smoke; 339 project tests pass."
+    },
+    {
+      "id": "US-023",
+      "title": "Global mailbox maintenance across tenants",
+      "description": "As an operator, I want mailbox reset and warmup maintenance to cover every connected mailbox, even before a tenant has an engagement.",
+      "acceptanceCriteria": [
+        "Storage exposes a global mailbox iterator.",
+        "Daily mailbox send cap reset uses the global mailbox iterator.",
+        "Mailbox warmup advancement uses connected mailboxes rather than engagement-derived tenant discovery.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Implemented in engine.storage.sqlite and engine.worker.celery_app; 339 project tests pass."
+    },
+    {
+      "id": "US-024",
+      "title": "Tenant-scoped booking webhook matching",
+      "description": "As an operator, I want production booking webhooks to require tenant or campaign scope so that one tenant's calendar event cannot mutate another tenant's prospects by shared email address.",
+      "acceptanceCriteria": [
+        "Production Cal.com booking webhooks require tenant or campaign scope before booking meetings.",
+        "Scoped webhook metadata constrains matching to the intended tenant/campaign.",
+        "Unscoped production booking payloads are acknowledged without creating meetings.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Implemented in cockpit.routes.webhooks; 339 project tests pass."
+    },
+    {
+      "id": "US-025",
+      "title": "Signed booking webhook live deploy probe",
+      "description": "As an operator, I want the production smoke command to prove the deployed Cal.com webhook accepts valid signatures so that launch checks cover both rejection and acceptance paths.",
+      "acceptanceCriteria": [
+        "Production smoke keeps rejecting unsigned booking webhook probes.",
+        "When a Cal.com smoke secret is supplied, production smoke sends a valid HMAC signature.",
+        "Production smoke fails if the signed webhook is rejected or unexpectedly matches a real booking.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Implemented in scripts.production_smoke; 339 project tests pass."
+    },
+    {
+      "id": "US-026",
+      "title": "Prospect tenant inheritance",
+      "description": "As an operator, I want API and CSV-created prospects to inherit tenant ownership from their campaign so that scoped production workflows can safely find them.",
+      "acceptanceCriteria": [
+        "Storage derives prospect tenant_id from the parent engagement when tenant_id is omitted.",
+        "Scoped Cal.com webhook matching can book prospects created through OperationsService.",
+        "Existing explicitly tenant-stamped prospect writes still work.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Implemented in engine.storage.sqlite and tests.test_webhook_security; 339 project tests pass."
+    },
+    {
+      "id": "US-027",
+      "title": "Scoped booking webhook live deploy exercise",
+      "description": "As an operator, I want the production smoke command to optionally exercise a real scoped booking webhook against a disposable contact so that live launch checks prove the booking mutation path works.",
+      "acceptanceCriteria": [
+        "Production smoke can create a disposable campaign and contact.",
+        "Production smoke can send a signed scoped Cal.com booking webhook for that contact.",
+        "Production smoke verifies the contact becomes booked and best-effort cancels the disposable campaign.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Implemented in scripts.production_smoke; 339 project tests pass."
+    },
+    {
+      "id": "US-028",
+      "title": "Production-safe mailbox OAuth redirects",
+      "description": "As an operator, I want mailbox OAuth redirects constrained in production so that paid pilots cannot connect mailboxes through localhost or foreign callback URLs.",
+      "acceptanceCriteria": [
+        "Mailbox connect/start rejects redirect URIs outside the mailbox callback path.",
+        "Production mode rejects localhost HTTP redirect URIs.",
+        "Production mode accepts HTTPS redirect URIs on the deployment host.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Implemented in cockpit.api.mailboxes; 339 project tests pass."
+    },
+    {
+      "id": "US-029",
+      "title": "Render worker credential-secret wiring",
+      "description": "As an operator, I want Render worker and beat services to receive the credential encryption key and smart-dispatch flag so that encrypted mailbox credentials work outside the web process.",
+      "acceptanceCriteria": [
+        "Render worker env includes AUTOREACH_CREDENTIAL_ENCRYPTION_KEY.",
+        "Render worker env includes AUTOREACH_RUNTIME_SMART_DISPATCH=1.",
+        "Render beat env includes AUTOREACH_CREDENTIAL_ENCRYPTION_KEY.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Implemented in render.yaml and tests.test_production_wiring; 339 project tests pass."
+    },
+    {
+      "id": "US-030",
+      "title": "Production JWT fail-closed guard",
+      "description": "As an operator, I want production-like deployments to refuse JWT issuance when the signing secret is missing or left at the dev fallback so that public auth cannot create forgeable tokens.",
+      "acceptanceCriteria": [
+        "Production-like envs reject missing AUTOREACH_JWT_SECRET before issuing tokens.",
+        "Production-like envs reject the known dev JWT secret value.",
+        "Local SQLite/dev auth flows continue to work without forcing production secrets.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Implemented in engine.auth.jwt_handler and cockpit.api.auth; 339 project tests pass."
+    },
+    {
+      "id": "US-031",
+      "title": "Executable live-ops launch kit",
+      "description": "As an operator, I want one launch planner for deploy secrets, DNS, OAuth, Cal.com, Phoenix, warmed mailboxes, and pilot onboarding so that code-complete startup work becomes a repeatable paid-pilot launch process.",
+      "acceptanceCriteria": [
+        "Operators can generate production-grade JWT, session, Fernet, and Cal.com secrets.",
+        "Operators can generate a deploy-specific launch plan that checks required Render envs.",
+        "The launch plan derives Google OAuth and Cal.com URLs.",
+        "The launch plan emits DNS and production smoke commands without leaking configured secret values.",
+        "A runbook documents deploy, secrets, DNS, OAuth, Cal.com metadata, Phoenix, warmed mailboxes, and pilot onboarding.",
+        "Tests pass.",
+        "Typecheck passes."
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "Implemented in scripts.live_ops_launch and docs.LIVE_OPS_RUNBOOK; 339 project tests expected."
+    }
+  ]
+}

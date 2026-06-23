@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e:playwright": "playwright test",
+    "test:e2e:playwright:ui": "playwright test --ui",
+    "test:e2e:playwright:codegen": "playwright codegen http://127.0.0.1:8766/app/",
+    "test:e2e:cypress": "env -u ELECTRON_RUN_AS_NODE cypress open --config baseUrl=http://127.0.0.1:8766/app",
+    "test:e2e:cypress:run": "env -u ELECTRON_RUN_AS_NODE cypress run --config baseUrl=http://127.0.0.1:8766/app"
   },
   "dependencies": {
     "framer-motion": "^11.18.2",
@@ -15,7 +20,9 @@
     "react-router-dom": "^7.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "cypress": "^15.8.0",
     "vite": "^6.0.7"
   }
 }

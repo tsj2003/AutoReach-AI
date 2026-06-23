@@ -42,7 +42,10 @@ def test_health_healthy_when_low_bounce(storage):
     now = datetime.now(timezone.utc)
     store.save_mailbox(Mailbox(id="m", tenant_id="t", email_address="x@y.com", created_at=now, updated_at=now))
     for i in range(10):
-        events.emit(Event(id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e"))
+        events.emit(Event(
+            id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e",
+            payload={"mailbox_id": "m"},
+        ))
     status = MailboxHealthMonitor(store=store, events=events).check_health("m")
     assert status.healthy is True
     assert status.bounce_rate == 0.0
@@ -53,14 +56,46 @@ def test_health_unhealthy_when_high_bounce(storage):
     now = datetime.now(timezone.utc)
     store.save_mailbox(Mailbox(id="m", tenant_id="t", email_address="x@y.com", created_at=now, updated_at=now))
     for i in range(10):
-        events.emit(Event(id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e"))
+        events.emit(Event(
+            id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e",
+            payload={"mailbox_id": "m"},
+        ))
     for i in range(2):
-        events.emit(Event(id=f"b{i}", kind=EventKind.EMAIL_BOUNCED, engagement_id="e"))
+        events.emit(Event(
+            id=f"b{i}", kind=EventKind.EMAIL_BOUNCED, engagement_id="e",
+            payload={"mailbox_id": "m"},
+        ))
     mon = MailboxHealthMonitor(store=store, events=events)
     status = mon.check_health("m")
     assert status.healthy is False  # 2/10 = 20% > 5%
     assert mon.auto_pause_if_unhealthy("m") is True
     assert store.get_mailbox("m").status == "paused"
+
+
+def test_health_is_mailbox_keyed(storage):
+    store, events, _ = storage
+    now = datetime.now(timezone.utc)
+    store.save_mailbox(Mailbox(id="m1", tenant_id="t", email_address="one@y.com", created_at=now, updated_at=now))
+    store.save_mailbox(Mailbox(id="m2", tenant_id="t", email_address="two@y.com", created_at=now, updated_at=now))
+    for i in range(10):
+        events.emit(Event(
+            id=f"s1_{i}", kind=EventKind.EMAIL_SENT, engagement_id="e",
+            payload={"mailbox_id": "m1"},
+        ))
+        events.emit(Event(
+            id=f"s2_{i}", kind=EventKind.EMAIL_SENT, engagement_id="e",
+            payload={"mailbox_id": "m2"},
+        ))
+    for i in range(4):
+        events.emit(Event(
+            id=f"b2_{i}", kind=EventKind.EMAIL_BOUNCED, engagement_id="e",
+            payload={"mailbox_id": "m2"},
+        ))
+
+    monitor = MailboxHealthMonitor(store=store, events=events)
+    assert monitor.check_health("m1").healthy is True
+    assert monitor.check_health("m1").bounce_rate == 0.0
+    assert monitor.check_health("m2").healthy is False
 
 
 def test_warmup_tick_advances_day_and_cap(storage):

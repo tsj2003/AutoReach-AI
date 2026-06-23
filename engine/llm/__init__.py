@@ -15,6 +15,7 @@ from engine.llm.gemini import (  # noqa: F401
     GeminiUnavailable,
     estimate_cost_cents,
 )
+from engine.llm.gateway import AgnosticLLMGateway  # noqa: F401
 from engine.llm.classifier import (  # noqa: F401
     ClassificationResult,
     classify_and_draft,
@@ -30,6 +31,7 @@ __all__ = [
     "GeminiResult",
     "GeminiUnavailable",
     "DEFAULT_MODEL",
+    "AgnosticLLMGateway",
     "estimate_cost_cents",
     "ClassificationResult",
     "classify_and_draft",

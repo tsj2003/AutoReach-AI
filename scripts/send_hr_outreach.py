@@ -22,6 +22,7 @@ import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from engine import (
     open_storage,
@@ -39,6 +40,20 @@ from engine import (
 
 # Email address format validation regex
 EMAIL_RE = re.compile(r"^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$")
+ALLOW_LEGACY_DIRECT_SEND_ENV = "AUTOREACH_ALLOW_LEGACY_DIRECT_SEND"
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_live_send_escape_hatch() -> None:
+    if not _env_flag(ALLOW_LEGACY_DIRECT_SEND_ENV):
+        raise SystemExit(
+            f"Live legacy outreach is disabled. Set {ALLOW_LEGACY_DIRECT_SEND_ENV}=1 "
+            "only for an intentional one-off operator run. Production sends should "
+            "flow through tenant mailboxes and the smart dispatch router."
+        )
 
 
 def clean_and_batch_contacts(csv_path: str, count: int = 100) -> list[dict]:
@@ -84,17 +99,28 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true", help="Run the campaign in LIVE mode (sends real emails)")
     parser.add_argument("--db", default="sqlite:///autoreach_engine.db", help="Database URL")
+    parser.add_argument("--csv", default=os.getenv("AUTOREACH_HR_CONTACTS_CSV", str(Path.home() / "Downloads" / "hr_contacts.csv")))
+    parser.add_argument("--out", default=os.getenv("AUTOREACH_HR_BATCH_CSV", "newlit.csv"))
+    parser.add_argument("--resume", default=os.getenv("AUTOREACH_HR_RESUME_PATH", "Tarandeep_Resume_AI (1).pdf"))
+    parser.add_argument("--token-path", default=os.getenv("AUTOREACH_GMAIL_TOKEN_PATH", "token.json"))
+    parser.add_argument("--sender-email", default=os.getenv("AUTOREACH_GMAIL_SENDER", ""))
+    parser.add_argument("--count", type=int, default=100)
     args = parser.parse_args()
 
     live_mode = args.live
-    csv_input_path = "/Users/tarandeepsinghjuneja/Downloads/hr_contacts.csv"
-    newlit_output_path = "/Users/tarandeepsinghjuneja/AutoReach-AI/newlit.csv"
-    resume_pdf_path = "/Users/tarandeepsinghjuneja/AutoReach-AI/Tarandeep_Resume_AI (1).pdf"
-    token_json_path = "/Users/tarandeepsinghjuneja/AutoReach-AI/token.json"
+    if live_mode:
+        _require_live_send_escape_hatch()
+        if not args.sender_email:
+            raise SystemExit("Live mode requires --sender-email or AUTOREACH_GMAIL_SENDER.")
+
+    csv_input_path = args.csv
+    newlit_output_path = args.out
+    resume_pdf_path = args.resume
+    token_json_path = args.token_path
 
     # 1. Clean and batch the contacts
     print(f"[*] Ingesting and cleaning contacts from: {csv_input_path}...")
-    batch = clean_and_batch_contacts(csv_input_path, count=100)
+    batch = clean_and_batch_contacts(csv_input_path, count=args.count)
     print(f"[+] Loaded {len(batch)} unique, valid HR contacts.")
 
     if not batch:
@@ -115,7 +141,7 @@ def main() -> None:
 
     # Configure adapter
     gmail_adapter = RealGmailSendAdapter(
-        sender_email="tarandeepjuneja11@gmail.com",
+        sender_email=args.sender_email or "dry-run@example.invalid",
         token_store=token_store,
         dry_run=not live_mode,
     )
@@ -161,7 +187,7 @@ def main() -> None:
         print(f"[+] Created Agent: {agent_id}")
 
     # 5. Plan and schedule jobs with random delays
-    print(f"[*] Scheduling 100 email jobs in the database...")
+    print(f"[*] Scheduling {len(batch)} email jobs in the database...")
     now = datetime.now(timezone.utc)
     current_scheduled_time = now
 

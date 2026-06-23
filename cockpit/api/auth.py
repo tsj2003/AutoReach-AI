@@ -26,6 +26,7 @@ from engine.auth import (
     hash_password,
     sign_jwt,
     verify_password,
+    AuthError,
     InvalidTokenError,
 )
 
@@ -132,16 +133,19 @@ def _effective_plan(tenant) -> str:
 
 
 def _make_tokens(user: User, plan: str) -> TokenResponse:
-    access = sign_jwt(
-        user_id=user.id, tenant_id=user.tenant_id,
-        email=user.email, role=user.role, plan=plan,
-        token_type="access",
-    )
-    refresh = sign_jwt(
-        user_id=user.id, tenant_id=user.tenant_id,
-        email=user.email, role=user.role, plan=plan,
-        token_type="refresh",
-    )
+    try:
+        access = sign_jwt(
+            user_id=user.id, tenant_id=user.tenant_id,
+            email=user.email, role=user.role, plan=plan,
+            token_type="access",
+        )
+        refresh = sign_jwt(
+            user_id=user.id, tenant_id=user.tenant_id,
+            email=user.email, role=user.role, plan=plan,
+            token_type="refresh",
+        )
+    except AuthError as exc:
+        raise HTTPException(503, "JWT signing secret is not configured") from exc
     return TokenResponse(
         access_token=access, refresh_token=refresh,
         user_id=user.id, tenant_id=user.tenant_id,
@@ -327,6 +331,8 @@ def refresh(body: RefreshRequest, store=Depends(get_store)):
         payload = decode_jwt(body.refresh_token, expected_type="refresh")
     except InvalidTokenError as exc:
         raise HTTPException(401, str(exc)) from exc
+    except AuthError as exc:
+        raise HTTPException(503, "JWT signing secret is not configured") from exc
 
     user = store.get_user(payload["sub"])
     if user is None or not user.is_active:

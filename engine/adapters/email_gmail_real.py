@@ -423,6 +423,7 @@ class RealGmailSendAdapter:
         sent_at = datetime.now(timezone.utc).isoformat()
         message_id = response.get("id") if isinstance(response, dict) else None
         gmail_thread_id = response.get("threadId") if isinstance(response, dict) else None
+        mailbox_id = getattr(self._tokens, "mailbox_id", None)
 
         context.emit(
             Event(
@@ -435,6 +436,8 @@ class RealGmailSendAdapter:
                 payload={
                     "to": to_email,
                     "via": "gmail",
+                    "mailbox_id": mailbox_id,
+                    "sender_email": self._sender_email,
                     "gmail_message_id": message_id,
                     "gmail_thread_id": gmail_thread_id,
                     "thread_id_requested": thread_id,

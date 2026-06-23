@@ -7,15 +7,18 @@ Two responsibilities:
   2. Health: track bounce/spam rates; auto-pause a mailbox that breaches
      thresholds and (optionally) rotate to a reserve.
 
-Metrics come from the event log (EMAIL_SENT, EMAIL_BOUNCED), so this is
-stateless and crash-safe — no counter to corrupt.
+Metrics come from the event log (EMAIL_SENT, EMAIL_BOUNCED,
+EMAIL_SPAM_COMPLAINT), keyed by mailbox_id in the payload, so one sender's
+reputation never contaminates another sender's health decision.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+from engine.core.types import EventKind
+from pydantic import BaseModel, ConfigDict
 
 # Daily send cap by warmup day (index 0 = day 0). After the list, full cap.
 WARMUP_RAMP = [10, 15, 25, 40, 60, 80, 100, 150]
@@ -24,21 +27,29 @@ BOUNCE_THRESHOLD = 0.05   # 5% → pause
 SPAM_THRESHOLD = 0.02     # 2% → pause
 
 
-@dataclass(frozen=True)
-class HealthStatus:
-    mailbox_id: str
-    sent: int
-    bounced: int
-    bounce_rate: float
-    healthy: bool
-    reason: str
-    recommended_daily_cap: int
+class HealthStatus(BaseModel):
+    """Structured mailbox health state keyed to a single mailbox_id."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mailbox_id: str = ""
+    sent: int = 0
+    bounced: int = 0
+    spam_complaints: int = 0
+    bounce_rate: float = 0.0
+    spam_rate: float = 0.0
+    healthy: bool = True
+    reason: str = "ok"
+    recommended_daily_cap: int = 0
+    status: str = "HEALTHY"
 
 
 class MailboxHealthMonitor:
-    def __init__(self, *, store, events) -> None:
+    def __init__(self, *, store=None, events=None, backend: str = "events") -> None:
         self._store = store
         self._events = events
+        self._backend = backend
+        self._memory: dict[str, dict[str, int]] = {}
 
     def recommended_cap(self, warmup_day: int) -> int:
         if warmup_day < 0:
@@ -47,29 +58,135 @@ class MailboxHealthMonitor:
             return WARMUP_RAMP[warmup_day]
         return 200  # graduated — full cap
 
+    async def log_sent(self, mailbox_id: str) -> None:
+        """Record one send in the memory backend."""
+        self._memory_row(mailbox_id)["sent"] += 1
+
+    async def log_bounce(self, mailbox_id: str) -> None:
+        """Record one bounce in the memory backend."""
+        self._memory_row(mailbox_id)["bounced"] += 1
+
+    async def log_spam_complaint(self, mailbox_id: str) -> None:
+        """Record one spam complaint in the memory backend."""
+        self._memory_row(mailbox_id)["spam_complaints"] += 1
+
+    async def get_health(self, mailbox_id: str) -> HealthStatus:
+        """Return async memory-backed health state for a single mailbox."""
+        row = self._memory_row(mailbox_id)
+        return self._build_status(
+            mailbox_id=mailbox_id,
+            sent=row["sent"],
+            bounced=row["bounced"],
+            spam_complaints=row["spam_complaints"],
+            recommended_daily_cap=0,
+        )
+
+    def _memory_row(self, mailbox_id: str) -> dict[str, int]:
+        return self._memory.setdefault(
+            mailbox_id,
+            {"sent": 0, "bounced": 0, "spam_complaints": 0},
+        )
+
+    def _event_matches_mailbox(self, ev, mailbox) -> bool:
+        payload = dict(ev.payload or {})
+        identifiers = {
+            payload.get("mailbox_id"),
+            payload.get("via_mailbox_id"),
+            payload.get("sender_mailbox_id"),
+        }
+        if mailbox.id in identifiers:
+            return True
+
+        # Backward-compatible fallback for older events that recorded address
+        # but not mailbox_id. Prefer mailbox_id for all new events.
+        addresses = {
+            payload.get("mailbox_email"),
+            payload.get("via_mailbox_email"),
+            payload.get("sender_email"),
+            payload.get("from"),
+            payload.get("from_email"),
+        }
+        return mailbox.email_address in addresses
+
     def check_health(self, mailbox_id: str) -> HealthStatus:
+        if self._store is None or self._events is None:
+            row = self._memory_row(mailbox_id)
+            return self._build_status(
+                mailbox_id=mailbox_id,
+                sent=row["sent"],
+                bounced=row["bounced"],
+                spam_complaints=row["spam_complaints"],
+                recommended_daily_cap=0,
+            )
+
         mailbox = self._store.get_mailbox(mailbox_id)
         if mailbox is None:
-            return HealthStatus(mailbox_id, 0, 0, 0.0, False, "mailbox not found", 0)
+            return HealthStatus(
+                mailbox_id=mailbox_id,
+                sent=0,
+                bounced=0,
+                spam_complaints=0,
+                bounce_rate=0.0,
+                spam_rate=0.0,
+                healthy=False,
+                reason="mailbox not found",
+                recommended_daily_cap=0,
+                status="NOT_FOUND",
+            )
 
-        # Count sent + bounced across the event log for this mailbox's address.
-        sent = bounced = 0
+        # Count sent + bounced + spam complaints for this mailbox over a rolling
+        # 24-hour window. Events from other mailboxes are deliberately ignored.
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        sent = bounced = spam_complaints = 0
         for ev in self._events.list_recent(limit=10_000):
-            via = ev.payload.get("to") if ev.payload else None  # not mailbox-keyed yet
-            if ev.kind.value == "email.sent":
+            occurred_at = ev.occurred_at
+            if occurred_at and occurred_at.tzinfo is None:
+                occurred_at = occurred_at.replace(tzinfo=timezone.utc)
+            if occurred_at and occurred_at < since:
+                continue
+            if not self._event_matches_mailbox(ev, mailbox):
+                continue
+            if ev.kind == EventKind.EMAIL_SENT:
                 sent += 1
-            elif ev.kind.value == "email.bounced":
+            elif ev.kind == EventKind.EMAIL_BOUNCED:
                 bounced += 1
+            elif ev.kind == EventKind.EMAIL_SPAM_COMPLAINT:
+                spam_complaints += 1
 
+        return self._build_status(
+            mailbox_id=mailbox_id,
+            sent=sent,
+            bounced=bounced,
+            spam_complaints=spam_complaints,
+            recommended_daily_cap=self.recommended_cap(mailbox.warmup_day),
+        )
+
+    def _build_status(
+        self,
+        *,
+        mailbox_id: str,
+        sent: int,
+        bounced: int,
+        spam_complaints: int,
+        recommended_daily_cap: int,
+    ) -> HealthStatus:
         bounce_rate = (bounced / sent) if sent else 0.0
-        healthy = bounce_rate < BOUNCE_THRESHOLD
-        reason = "ok" if healthy else f"bounce rate {bounce_rate:.1%} exceeds {BOUNCE_THRESHOLD:.0%}"
+        spam_rate = (spam_complaints / sent) if sent else 0.0
+        healthy = bounce_rate < BOUNCE_THRESHOLD and spam_rate < SPAM_THRESHOLD
+        if bounce_rate >= BOUNCE_THRESHOLD:
+            reason = f"bounce rate {bounce_rate:.1%} exceeds {BOUNCE_THRESHOLD:.0%}"
+        elif spam_rate >= SPAM_THRESHOLD:
+            reason = f"spam complaint rate {spam_rate:.1%} exceeds {SPAM_THRESHOLD:.0%}"
+        else:
+            reason = "ok"
 
         return HealthStatus(
-            mailbox_id=mailbox_id,
-            sent=sent, bounced=bounced, bounce_rate=bounce_rate,
+            mailbox_id=mailbox_id, sent=sent, bounced=bounced,
+            spam_complaints=spam_complaints,
+            bounce_rate=bounce_rate, spam_rate=spam_rate,
             healthy=healthy, reason=reason,
-            recommended_daily_cap=self.recommended_cap(mailbox.warmup_day),
+            recommended_daily_cap=recommended_daily_cap,
+            status="HEALTHY" if healthy else "PAUSED_SAFETY",
         )
 
     def auto_pause_if_unhealthy(self, mailbox_id: str) -> bool:

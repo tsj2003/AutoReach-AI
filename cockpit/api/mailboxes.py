@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -43,6 +44,44 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}_{secrets.token_hex(8)}"
 
 
+def _production_mode() -> bool:
+    return os.getenv("AUTOREACH_ENABLE_CONSOLE", "1").strip().lower() in {
+        "0", "false", "no", "off",
+    }
+
+
+def _is_localhost(hostname: str | None) -> bool:
+    return (hostname or "").lower() in {"localhost", "127.0.0.1", "::1"}
+
+
+def _validate_redirect_uri(redirect_uri: str, *, request: Request) -> None:
+    parsed = urlparse(redirect_uri)
+    if parsed.path != "/api/mailboxes/connect/callback":
+        raise HTTPException(400, "redirect_uri must use the mailbox callback path")
+
+    if not _production_mode():
+        if parsed.scheme == "https":
+            return
+        if parsed.scheme == "http" and _is_localhost(parsed.hostname):
+            return
+        raise HTTPException(400, "redirect_uri must be HTTPS or local HTTP")
+
+    expected_host = request.url.hostname
+    public_base = os.getenv("AUTOREACH_PUBLIC_BASE_URL", "").strip()
+    if public_base:
+        expected_host = urlparse(public_base).hostname or expected_host
+
+    if parsed.scheme != "https":
+        raise HTTPException(400, "redirect_uri must be HTTPS in production")
+    if parsed.hostname != expected_host:
+        raise HTTPException(400, "redirect_uri host must match this deployment")
+
+
+def _allow_insecure_oauth_transport(redirect_uri: str) -> bool:
+    parsed = urlparse(redirect_uri)
+    return parsed.scheme == "http" and _is_localhost(parsed.hostname)
+
+
 def _mailbox_to_dict(m: Mailbox) -> dict:
     return {
         "id": m.id, "email_address": m.email_address, "provider": m.provider,
@@ -67,6 +106,8 @@ def connect_start(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    _validate_redirect_uri(body.redirect_uri, request=request)
+
     # M5: enforce plan mailbox cap.
     from engine.policies import get_plan_limits
     store = request.app.state.store
@@ -130,7 +171,8 @@ def connect_callback(
 
     from google_auth_oauthlib.flow import Flow  # type: ignore
 
-    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+    if _allow_insecure_oauth_transport(ctx["redirect_uri"]):
+        os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
     config = {
         "web": {
             "client_id": ctx["client_id"],

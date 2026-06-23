@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { clearTokens } from "../api/client.js";
 import SocialAuth from "../components/SocialAuth.jsx";
 
 export default function Login() {
@@ -12,6 +13,10 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    clearTokens();
+  }, []);
 
   async function submit(e) {
     e.preventDefault();

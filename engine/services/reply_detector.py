@@ -39,6 +39,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Iterable, Optional
 
+from engine.adapters.db_token_store import DbTokenStore
+
 from engine.adapters.gmail_token_store import (
     GmailTokenStore,
     TokenInvalid,
@@ -96,6 +98,7 @@ class GmailReplyDetector:
         sender_email: str,
         gemini: Optional[GeminiClient] = None,
         gmail_build: Optional[Callable] = None,  # for tests
+        mailbox_id: Optional[str] = None,
     ) -> None:
         self._store = store
         self._events = events
@@ -105,6 +108,7 @@ class GmailReplyDetector:
         self._sender = sender_email.lower().strip()
         self._gemini = gemini
         self._gmail_build = gmail_build
+        self._mailbox_id = mailbox_id
 
     # ─── Public API ─────────────────────────────────────────────────────
 
@@ -210,6 +214,8 @@ class GmailReplyDetector:
                 and ev.prospect_id == prospect_id
                 and ev.payload.get("gmail_thread_id")
             ):
+                if self._mailbox_id is not None and ev.payload.get("mailbox_id") != self._mailbox_id:
+                    continue
                 return str(ev.payload.get("gmail_thread_id"))
         return None
 
@@ -293,7 +299,10 @@ class GmailReplyDetector:
                         job_id=None,
                         category="llm",
                         amount_cents=classification.estimated_cost_cents,
-                        metadata={"purpose": "reply_classify_and_draft"},
+                        metadata={
+                            "purpose": "reply_classify_and_draft",
+                            "openinference_trace_id": classification.openinference_trace_id,
+                        },
                     )
                 )
                 result.llm_cost_cents += classification.estimated_cost_cents
@@ -312,6 +321,7 @@ class GmailReplyDetector:
                             "via": "gmail",
                             "auto_responder": True,
                             "external_message_id": msg_id,
+                            "openinference_trace_id": classification.openinference_trace_id,
                         },
                     )
                 )
@@ -336,6 +346,7 @@ class GmailReplyDetector:
                         "classification": classification.classification,
                         "fallback_used": classification.fallback_used,
                         "external_message_id": msg_id,
+                        "openinference_trace_id": classification.openinference_trace_id,
                     },
                 )
             )
@@ -366,6 +377,83 @@ class GmailReplyDetector:
             created_at=prospect.created_at,
         )
         self._store.save_prospect(replacement)
+
+
+class TenantMailboxReplyDetector:
+    """Poll replies through the tenant's connected Gmail mailboxes."""
+
+    def __init__(
+        self,
+        *,
+        store: Store,
+        events: EventSink,
+        ledger: CostLedger,
+        ops: OperationsService,
+        gemini: Optional[GeminiClient] = None,
+        gmail_build_factory: Optional[Callable[[object], Callable]] = None,
+    ) -> None:
+        self._store = store
+        self._events = events
+        self._ledger = ledger
+        self._ops = ops
+        self._gemini = gemini
+        self._gmail_build_factory = gmail_build_factory
+
+    def poll(self, engagement_id: str, *, max_prospects: int = 200) -> ReplyDetectionResult:
+        result = ReplyDetectionResult()
+        tenant_id = self._tenant_id_for_engagement(engagement_id)
+        if not tenant_id:
+            result.errors.append(f"tenant not found for engagement: {engagement_id}")
+            return result
+
+        mailboxes = [
+            mailbox for mailbox in self._store.list_mailboxes(tenant_id)
+            if getattr(mailbox, "provider", "gmail") == "gmail"
+            and getattr(mailbox, "status", "active") in {"active", "warming"}
+        ]
+        if not mailboxes:
+            result.errors.append(f"no active gmail mailboxes for tenant: {tenant_id}")
+            return result
+
+        for mailbox in mailboxes:
+            detector = GmailReplyDetector(
+                store=self._store,
+                events=self._events,
+                ledger=self._ledger,
+                ops=self._ops,
+                token_store=DbTokenStore(store=self._store, mailbox_id=mailbox.id),
+                sender_email=mailbox.email_address,
+                gemini=self._gemini,
+                gmail_build=self._gmail_build_for(mailbox),
+                mailbox_id=mailbox.id,
+            )
+            mailbox_result = detector.poll(engagement_id, max_prospects=max_prospects)
+            self._merge_result(result, mailbox_result)
+
+        return result
+
+    def _tenant_id_for_engagement(self, engagement_id: str) -> Optional[str]:
+        resolver = getattr(self._store, "get_engagement_tenant_id", None)
+        if callable(resolver):
+            return resolver(engagement_id)
+        return None
+
+    def _gmail_build_for(self, mailbox: object) -> Optional[Callable]:
+        if self._gmail_build_factory is None:
+            return None
+        return self._gmail_build_factory(mailbox)
+
+    @staticmethod
+    def _merge_result(target: ReplyDetectionResult, source: ReplyDetectionResult) -> None:
+        target.prospects_scanned += source.prospects_scanned
+        target.threads_polled += source.threads_polled
+        target.replies_recorded += source.replies_recorded
+        target.auto_responders += source.auto_responders
+        target.duplicates_skipped += source.duplicates_skipped
+        target.errors.extend(source.errors)
+        target.fell_back_to_default += source.fell_back_to_default
+        target.llm_cost_cents += source.llm_cost_cents
+        target.token_invalid = target.token_invalid or source.token_invalid
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────

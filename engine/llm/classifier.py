@@ -34,6 +34,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from opentelemetry import trace
+
 from engine.llm.gemini import (
     GeminiClient,
     GeminiError,
@@ -71,6 +73,7 @@ class ClassificationResult:
     return_date: Optional[str] = None          # ISO date for out_of_office
     referred_email: Optional[str] = None        # for referral
     referred_name: Optional[str] = None         # for referral
+    openinference_trace_id: Optional[str] = None
 
 
 _PROMPT_TEMPLATE = """\
@@ -120,17 +123,18 @@ Return STRICT JSON:
 """
 
 
-def _fallback(error: str, cost: int = 0) -> ClassificationResult:
+def _fallback(error: str, cost: int = 0, trace_id: Optional[str] = None) -> ClassificationResult:
     return ClassificationResult(
         classification="objection",
         suggested_reply="",
         fallback_used=True,
         error=error,
         estimated_cost_cents=cost,
+        openinference_trace_id=trace_id,
     )
 
 
-def classify_and_draft(
+def _classify_and_draft_impl(
     *,
     snippet: str,
     original_subject: str = "",
@@ -138,10 +142,11 @@ def classify_and_draft(
     booking_url: str = "",
     client: Optional[GeminiClient] = None,
     temperature: float = 0.3,
+    trace_id: Optional[str] = None,
 ) -> ClassificationResult:
     """Classify a reply + draft a response. Never raises."""
     if not snippet or not snippet.strip():
-        return _fallback("empty snippet")
+        return _fallback("empty snippet", trace_id=trace_id)
 
     client = client or GeminiClient()
     original_body = (original_body or "")[:1200]
@@ -158,15 +163,15 @@ def classify_and_draft(
         result = client.generate_json(prompt=prompt, temperature=temperature)
     except GeminiUnavailable as exc:
         logger.info("Gemini unavailable; classifier fallback: %s", exc)
-        return _fallback(str(exc))
+        return _fallback(str(exc), trace_id=trace_id)
     except GeminiError as exc:
         logger.warning("Gemini error during classification: %s", exc)
-        return _fallback(str(exc))
+        return _fallback(str(exc), trace_id=trace_id)
 
     cost = estimate_cost_cents(prompt_chars=len(prompt), output_chars=len(result.raw_text))
     classification = str(result.data.get("classification") or "").strip().lower()
     if classification not in VALID_CLASSIFICATIONS:
-        return _fallback(f"invalid classification '{classification}' from gemini", cost)
+        return _fallback(f"invalid classification '{classification}' from gemini", cost, trace_id=trace_id)
 
     suggested = str(result.data.get("suggested_reply") or "").strip()
     if classification in ("auto", "out_of_office"):
@@ -193,4 +198,39 @@ def classify_and_draft(
         return_date=return_date if classification == "out_of_office" else None,
         referred_email=referred_email if classification == "referral" else None,
         referred_name=referred_name if classification == "referral" else None,
+        openinference_trace_id=trace_id,
     )
+
+
+def classify_and_draft(
+    *,
+    snippet: str,
+    original_subject: str = "",
+    original_body: str = "",
+    booking_url: str = "",
+    client: Optional[GeminiClient] = None,
+    temperature: float = 0.3,
+) -> ClassificationResult:
+    """Classify a reply + draft a response with an OpenInference trace id."""
+
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("reply.classify_and_draft") as span:
+        span.set_attribute("openinference.span.kind", "LLM")
+        span.set_attribute("reply.snippet_chars", len(snippet or ""))
+        span.set_attribute("reply.has_booking_url", bool(booking_url))
+        trace_id = format(span.get_span_context().trace_id, "032x")
+        result = _classify_and_draft_impl(
+            snippet=snippet,
+            original_subject=original_subject,
+            original_body=original_body,
+            booking_url=booking_url,
+            client=client,
+            temperature=temperature,
+            trace_id=trace_id,
+        )
+        span.set_attribute("reply.classification", result.classification)
+        span.set_attribute("reply.fallback_used", result.fallback_used)
+        span.set_attribute("reply.estimated_cost_cents", result.estimated_cost_cents)
+        if result.error:
+            span.set_attribute("error.message", result.error)
+        return result

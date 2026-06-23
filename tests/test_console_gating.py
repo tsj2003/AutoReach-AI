@@ -52,3 +52,21 @@ def test_api_still_works_when_console_disabled(tmp_path, monkeypatch):
     })
     assert r.status_code == 200, r.text
     assert r.json()["access_token"]
+
+
+def test_legacy_oauth_disabled_with_console_but_mailbox_api_remains(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+    client = _make_client(tmp_path, "nolegacyoath.db")
+
+    assert client.get("/oauth/google/start").status_code == 404
+    assert client.get("/oauth/status").status_code == 404
+    assert client.get("/api/mailboxes").status_code in {401, 403}
+
+
+def test_openapi_schema_is_not_public(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+    client = _make_client(tmp_path, "noopenapi.db")
+
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404

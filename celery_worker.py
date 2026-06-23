@@ -7,3 +7,4 @@ Usage:
 """
 
 from engine.worker import celery_app  # noqa: F401
+import engine.tasks  # noqa: F401,E402  # register HITL dispatch task

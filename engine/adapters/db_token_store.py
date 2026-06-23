@@ -28,6 +28,10 @@ class DbTokenStore:
         self._store = store
         self._mailbox_id = mailbox_id
 
+    @property
+    def mailbox_id(self) -> str:
+        return self._mailbox_id
+
     def load(self) -> "object":
         mailbox = self._store.get_mailbox(self._mailbox_id)
         if mailbox is None:

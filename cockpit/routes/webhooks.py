@@ -9,7 +9,8 @@ Environment variables
 ---------------------
     CALCOM_WEBHOOK_SECRET   — the secret set in Cal.com dashboard
                               (Settings → Webhooks → secret)
-    If not set, signature verification is skipped (dev only — always warn).
+    If not set, signature verification is skipped only for local dev. When the
+    production legacy console is disabled, unsigned booking webhooks fail shut.
 
 Cal.com payload shape (simplified)
 ------------------------------------
@@ -68,12 +69,18 @@ async def calcom_booking_webhook(
     """
     body = await request.body()
     webhook_secret = os.getenv("CALCOM_WEBHOOK_SECRET", "").strip()
+    production_mode = os.getenv("AUTOREACH_ENABLE_CONSOLE", "1").strip().lower() in {
+        "0", "false", "no", "off",
+    }
 
     # Signature verification
     if webhook_secret:
         if not _verify_signature(body, x_cal_signature_256, webhook_secret):
             logger.warning("Cal.com webhook signature mismatch — request rejected")
             raise HTTPException(401, "Invalid webhook signature")
+    elif production_mode:
+        logger.warning("Cal.com webhook rejected because CALCOM_WEBHOOK_SECRET is not configured")
+        raise HTTPException(503, "CALCOM_WEBHOOK_SECRET is required in production")
     else:
         logger.warning(
             "CALCOM_WEBHOOK_SECRET not set — skipping signature verification (dev only)"
@@ -111,21 +118,51 @@ async def calcom_booking_webhook(
 
     # Find the prospect by attendee email across all active engagements.
     attendee_emails = [a.get("email", "").strip().lower() for a in attendees if a.get("email")]
+    scope = _extract_booking_scope(payload, booking)
 
     if trigger == "BOOKING_CANCELLED":
-        return _handle_cancellation(store, ops, attendee_emails, booking_uid)
+        return _handle_cancellation(
+            store,
+            ops,
+            attendee_emails,
+            booking_uid,
+            scope=scope,
+            production_mode=production_mode,
+        )
 
     if trigger == "BOOKING_RESCHEDULED":
         # Treat rescheduled as cancel old + create new (simpler state).
-        _handle_cancellation(store, ops, attendee_emails, booking_uid)
+        _handle_cancellation(
+            store,
+            ops,
+            attendee_emails,
+            booking_uid,
+            scope=scope,
+            production_mode=production_mode,
+        )
         # Fall through to create the new booking.
 
     # BOOKING_CREATED (or rescheduled-new)
     booked = []
+    engagements = _candidate_engagements(
+        store,
+        scope=scope,
+        production_mode=production_mode,
+    )
+    if engagements is None:
+        logger.warning(
+            "Cal.com booking ignored because no tenant/campaign scope was present in production payload"
+        )
+        return JSONResponse({
+            "ok": True,
+            "matched": False,
+            "emails_searched": attendee_emails,
+            "message": "No tenant or campaign scope found in webhook metadata",
+        })
+
     for email in attendee_emails:
-        # Search all engagements for a prospect with this email.
-        for eng in store.list_engagements(status="active"):
-            prospects = list(store.list_prospects(eng.id, limit=10_000))
+        for eng, tenant_id in engagements:
+            prospects = list(store.list_prospects(eng.id, limit=10_000, tenant_id=tenant_id))
             for p in prospects:
                 if (p.email or "").lower() == email and p.status not in ("unsubscribed", "booked"):
                     meeting = ops.book_meeting(
@@ -161,10 +198,122 @@ async def calcom_booking_webhook(
     return JSONResponse({"ok": True, "matched": True, "booked": booked})
 
 
-def _handle_cancellation(store, ops, attendee_emails: list[str], booking_uid: str):
+def _extract_booking_scope(payload: dict, booking: dict) -> dict[str, str]:
+    """
+    Pull tenant/campaign hints from common Cal.com metadata shapes.
+
+    Cal.com custom fields and metadata can arrive under a few nested objects
+    depending on event type and embed/configuration. We only need stable IDs,
+    so this keeps parsing intentionally narrow and ignores unrelated values.
+    """
+    scope: dict[str, str] = {}
+    tenant_keys = {"tenant_id", "tenantId", "tenant", "autoreach_tenant_id"}
+    engagement_keys = {
+        "engagement_id",
+        "engagementId",
+        "campaign_id",
+        "campaignId",
+        "campaign",
+        "autoreach_campaign_id",
+    }
+
+    def visit(value) -> None:
+        if not isinstance(value, dict):
+            return
+        for key, raw in value.items():
+            if isinstance(raw, str):
+                normalized = raw.strip()
+                if normalized and key in tenant_keys:
+                    scope.setdefault("tenant_id", normalized)
+                if normalized and key in engagement_keys:
+                    scope.setdefault("engagement_id", normalized)
+            elif isinstance(raw, dict):
+                # Cal.com responses are commonly {field: {"value": "..."}}.
+                if key in tenant_keys or key in engagement_keys:
+                    nested_value = raw.get("value") or raw.get("text") or raw.get("id")
+                    if isinstance(nested_value, str) and nested_value.strip():
+                        if key in tenant_keys:
+                            scope.setdefault("tenant_id", nested_value.strip())
+                        else:
+                            scope.setdefault("engagement_id", nested_value.strip())
+                visit(raw)
+
+    for candidate in (
+        payload.get("metadata"),
+        booking.get("metadata"),
+        booking.get("responses"),
+        booking.get("customInputs"),
+        booking.get("eventType", {}).get("metadata") if isinstance(booking.get("eventType"), dict) else None,
+    ):
+        visit(candidate)
+
+    return scope
+
+
+def _legacy_global_matching_enabled(*, production_mode: bool) -> bool:
+    configured = os.getenv("AUTOREACH_ALLOW_LEGACY_GLOBAL_WEBHOOK_MATCH")
+    if configured is not None:
+        return configured.strip().lower() in {"1", "true", "yes", "on"}
+    return not production_mode
+
+
+def _candidate_engagements(store, *, scope: dict[str, str], production_mode: bool):
+    """
+    Return scoped candidate engagements as (engagement, tenant_id).
+
+    In production, an unscoped webhook must not scan all tenants by email. Dev
+    keeps the legacy global search so local Cal.com tests remain low-friction.
+    """
+    tenant_id = scope.get("tenant_id")
+    engagement_id = scope.get("engagement_id")
+
+    if engagement_id:
+        engagement = store.get_engagement(engagement_id, tenant_id=tenant_id) if tenant_id else store.get_engagement(engagement_id)
+        if engagement is None or engagement.status != "active":
+            return []
+        resolved_tenant_id = tenant_id
+        if not resolved_tenant_id:
+            resolver = getattr(store, "get_engagement_tenant_id", None)
+            resolved_tenant_id = resolver(engagement_id) if callable(resolver) else None
+        return [(engagement, resolved_tenant_id)]
+
+    if tenant_id:
+        return [
+            (engagement, tenant_id)
+            for engagement in store.list_engagements(status="active", tenant_id=tenant_id)
+        ]
+
+    if _legacy_global_matching_enabled(production_mode=production_mode):
+        candidates = []
+        resolver = getattr(store, "get_engagement_tenant_id", None)
+        for engagement in store.list_engagements(status="active"):
+            resolved_tenant_id = resolver(engagement.id) if callable(resolver) else None
+            candidates.append((engagement, resolved_tenant_id))
+        return candidates
+
+    return None
+
+
+def _handle_cancellation(
+    store,
+    ops,
+    attendee_emails: list[str],
+    booking_uid: str,
+    *,
+    scope: dict[str, str],
+    production_mode: bool,
+):
     """Find any booked meeting for these emails and mark it cancelled."""
+    engagements = _candidate_engagements(
+        store,
+        scope=scope,
+        production_mode=production_mode,
+    )
+    if engagements is None:
+        return JSONResponse({"ok": True, "action": "cancelled", "matched": False})
+
     for email in attendee_emails:
-        for eng in store.list_engagements():
+        for eng, _tenant_id in engagements:
             meetings = list(store.list_meetings(eng.id, status="booked", limit=1000))
             for m in meetings:
                 prospect = store.get_prospect(m.prospect_id)

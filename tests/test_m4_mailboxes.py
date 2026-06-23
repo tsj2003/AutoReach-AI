@@ -45,6 +45,42 @@ def test_mailbox_roundtrip(storage):
     assert fetched.status == "active"
 
 
+def test_mailbox_credentials_encrypt_at_rest_when_key_configured(storage, monkeypatch):
+    from engine.storage.sqlite import mailboxes_table
+    from sqlalchemy import select
+
+    key = "EFONWtQiHXh-5vpx9TVH0qCuVCkqUgJutdYjRM3J_iE="
+    monkeypatch.setenv("AUTOREACH_CREDENTIAL_ENCRYPTION_KEY", key)
+    store, _, _ = storage
+    now = datetime.now(timezone.utc)
+    mb = Mailbox(
+        id="mbx_secret",
+        tenant_id="t1",
+        email_address="secure@gmail.com",
+        credentials_json={"token": "plain-token", "refresh_token": "plain-refresh"},
+        oauth_client_secret="plain-client-secret",
+        created_at=now,
+        updated_at=now,
+    )
+
+    store.save_mailbox(mb)
+
+    with store._holder.conn() as c:
+        row = c.execute(
+            select(mailboxes_table).where(mailboxes_table.c.id == "mbx_secret")
+        ).first()
+
+    assert row.credentials_json["__autoreach_encrypted__"] is True
+    assert "plain-token" not in str(row.credentials_json)
+    assert row.oauth_client_secret.startswith("enc:v1:")
+    assert "plain-client-secret" not in row.oauth_client_secret
+
+    fetched = store.get_mailbox("mbx_secret")
+    assert fetched.credentials_json["token"] == "plain-token"
+    assert fetched.credentials_json["refresh_token"] == "plain-refresh"
+    assert fetched.oauth_client_secret == "plain-client-secret"
+
+
 def test_list_mailboxes_by_tenant(storage):
     store, _, _ = storage
     now = datetime.now(timezone.utc)
@@ -53,6 +89,17 @@ def test_list_mailboxes_by_tenant(storage):
     store.save_mailbox(Mailbox(id="c", tenant_id="t2", email_address="c@x.com", created_at=now, updated_at=now))
     assert len(list(store.list_mailboxes("t1"))) == 2
     assert len(list(store.list_mailboxes("t2"))) == 1
+
+
+def test_list_all_mailboxes_crosses_tenants(storage):
+    store, _, _ = storage
+    now = datetime.now(timezone.utc)
+    store.save_mailbox(Mailbox(id="a", tenant_id="t1", email_address="a@x.com", status="active", created_at=now, updated_at=now))
+    store.save_mailbox(Mailbox(id="b", tenant_id="t2", email_address="b@x.com", status="warming", created_at=now, updated_at=now))
+    store.save_mailbox(Mailbox(id="c", tenant_id="t3", email_address="c@x.com", status="revoked", created_at=now, updated_at=now))
+
+    assert {m.id for m in store.list_all_mailboxes()} == {"a", "b", "c"}
+    assert {m.id for m in store.list_all_mailboxes(status="active")} == {"a"}
 
 
 def test_update_mailbox_status(storage):
@@ -127,6 +174,51 @@ def test_mailboxes_connect_start_returns_auth_url(auth_client):
     assert r.status_code == 200
     assert "accounts.google.com" in r.json()["authorization_url"]
     assert r.json()["state"]
+
+
+def test_mailboxes_connect_start_rejects_local_redirect_in_production(auth_client, monkeypatch):
+    client, tokens = auth_client
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+
+    r = client.post("/api/mailboxes/connect/start", json={
+        "client_id": "test-client-id.apps.googleusercontent.com",
+        "client_secret": "test-secret",
+        "redirect_uri": "http://127.0.0.1:8765/api/mailboxes/connect/callback",
+    }, headers=h)
+
+    assert r.status_code == 400
+    assert "HTTPS" in r.text
+
+
+def test_mailboxes_connect_start_accepts_same_host_https_redirect_in_production(auth_client, monkeypatch):
+    client, tokens = auth_client
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
+
+    r = client.post("/api/mailboxes/connect/start", json={
+        "client_id": "test-client-id.apps.googleusercontent.com",
+        "client_secret": "test-secret",
+        "redirect_uri": "https://testserver/api/mailboxes/connect/callback",
+    }, headers=h)
+
+    assert r.status_code == 200
+    assert "accounts.google.com" in r.json()["authorization_url"]
+    assert r.json()["state"]
+
+
+def test_mailboxes_connect_start_rejects_wrong_callback_path(auth_client):
+    client, tokens = auth_client
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    r = client.post("/api/mailboxes/connect/start", json={
+        "client_id": "test-client-id.apps.googleusercontent.com",
+        "client_secret": "test-secret",
+        "redirect_uri": "http://127.0.0.1:8765/oauth/google/callback",
+    }, headers=h)
+
+    assert r.status_code == 400
+    assert "mailbox callback path" in r.text
 
 
 def test_mailboxes_requires_auth(auth_client):

@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -86,6 +86,12 @@ def _build_email_adapter():
     }
 
 
+def _smart_runtime_dispatch_enabled() -> bool:
+    return os.getenv("AUTOREACH_RUNTIME_SMART_DISPATCH", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
 def _build_reply_detector(
     *,
     info: dict,
@@ -95,15 +101,27 @@ def _build_reply_detector(
     ops,
 ):
     """
-    Build a GmailReplyDetector if Gmail is wired, else return None.
+    Build a reply detector if Gmail is wired, else return None.
 
     The cockpit gates the 'Poll replies' button on this. When None, we show
     a small note in the UI explaining what env vars are missing.
     """
+    from engine.llm import GeminiClient
+
+    if info.get("kind") == "smart_router":
+        from engine.services import TenantMailboxReplyDetector
+
+        return TenantMailboxReplyDetector(
+            store=store,
+            events=events,
+            ledger=ledger,
+            ops=ops,
+            gemini=GeminiClient(),
+        )
+
     if info.get("kind") != "gmail":
         return None
     from engine import JsonFileTokenStore
-    from engine.llm import GeminiClient
     from engine.services import GmailReplyDetector
 
     token_store = JsonFileTokenStore(token_path=info["token_path"])
@@ -126,10 +144,10 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     Parameters
     ----------
     db_url : str | None
-        SQLAlchemy URL for storage. Defaults to env var AUTOREACH_DB
-        or ``sqlite:///autoreach_engine.db`` in the working directory.
+        SQLAlchemy URL for storage. Defaults to env var DATABASE_URL,
+        then AUTOREACH_DB, then ``sqlite:///autoreach_engine.db``.
     """
-    db_url = db_url or os.getenv("AUTOREACH_DB", "sqlite:///autoreach_engine.db")
+    db_url = db_url or os.getenv("DATABASE_URL") or os.getenv("AUTOREACH_DB", "sqlite:///autoreach_engine.db")
 
     store, events, ledger = open_storage(db_url)
     ops = OperationsService(store=store, events=events)
@@ -137,6 +155,17 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     csv_ingest = CsvIngestService(ops)
 
     email_adapter, email_adapter_info = _build_email_adapter()
+    if _smart_runtime_dispatch_enabled():
+        from engine.dispatch import SmartRoutedEmailAdapter
+
+        email_adapter = SmartRoutedEmailAdapter(store=store, events=events, ledger=ledger)
+        email_adapter_info = {
+            "kind": "smart_router",
+            "sender": "tenant mailbox router",
+            "dry_run": False,
+            "token_path": None,
+            "token_invalid": False,
+        }
 
     # Construct the outbound agent runner. If GEMINI_API_KEY is set, plug
     # personalization in; otherwise the runner falls back to template-only.
@@ -167,7 +196,11 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     templates.env.filters["cents"] = _format_cents
     templates.env.filters["pct"] = _format_pct
 
-    app = FastAPI(title="AutoReach Cockpit", docs_url=None, redoc_url=None)
+    from engine.telemetry.provider import setup_phoenix_telemetry_from_env
+
+    telemetry_provider = setup_phoenix_telemetry_from_env()
+
+    app = FastAPI(title="AutoReach Cockpit", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     # CORS — allow React dev server and same origin.
@@ -196,11 +229,12 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     app.state.email_adapter = email_adapter
     app.state.email_adapter_info = email_adapter_info
     app.state.reply_detector = reply_detector
+    app.state.telemetry_provider = telemetry_provider
+    app.state.db_url = db_url
     app.state.last_poll_result = None
 
     # ─── routes ──────────────────────────────────────────────────────
     from cockpit.routes import engagements, prospects, replies, meetings, runtime_routes
-    from cockpit.routes.oauth_routes import router as oauth_router
     from cockpit.routes.webhooks import router as webhooks_router
     from cockpit.api.auth import router as auth_api_router
     from cockpit.api.campaigns import router as campaigns_api_router
@@ -209,8 +243,11 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     from cockpit.api.meetings_api import router as meetings_api_router
     from cockpit.api.analytics import router as analytics_api_router
     from cockpit.api.billing import router as billing_api_router
+    from cockpit.api.dashboard import router as dashboard_api_router
     from cockpit.api.mailboxes import router as mailboxes_api_router
     from cockpit.api.orphaned import router as orphaned_api_router
+    from cockpit.api.outbox import router as outbox_api_router
+    from cockpit.api.operations import router as operations_api_router
 
     # The legacy Jinja operator console has NO authentication and is not
     # tenant-scoped, so it must never be exposed publicly. It is enabled by
@@ -219,7 +256,12 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     console_enabled = os.getenv("AUTOREACH_ENABLE_CONSOLE", "1").strip().lower() in (
         "1", "true", "yes", "on",
     )
+    legacy_oauth_enabled = os.getenv(
+        "AUTOREACH_ENABLE_LEGACY_OAUTH",
+        "1" if console_enabled else "0",
+    ).strip().lower() in ("1", "true", "yes", "on")
     app.state.console_enabled = console_enabled
+    app.state.legacy_oauth_enabled = legacy_oauth_enabled
 
     if console_enabled:
         # Jinja2 cockpit routes (operator console — dev only, no auth)
@@ -229,8 +271,26 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
         app.include_router(meetings.router)
         app.include_router(runtime_routes.router)
 
-    # OAuth + webhooks are needed in all environments (mailbox connect, Cal.com).
-    app.include_router(oauth_router)
+    # Legacy token-file OAuth belongs to the unauthenticated Jinja console.
+    # Production mailbox connect uses the JWT-protected /api/mailboxes routes.
+    if legacy_oauth_enabled:
+        from cockpit.routes.oauth_routes import router as oauth_router
+        app.include_router(oauth_router)
+
+        @app.get("/oauth/status")
+        def oauth_status_page():
+            token_path = os.getenv("AUTOREACH_GMAIL_TOKEN_PATH", "token.json")
+            from engine import JsonFileTokenStore
+            from pathlib import Path as _Path
+            token_store = JsonFileTokenStore(token_path=token_path)
+            return {
+                "configured": bool(os.getenv("GOOGLE_CLIENT_ID")),
+                "token_exists": _Path(token_path).exists(),
+                "token_invalid": token_store.is_invalid(),
+                "sender": os.getenv("AUTOREACH_GMAIL_SENDER", ""),
+            }
+
+    # Webhooks are needed in all environments (Cal.com).
     app.include_router(webhooks_router)
 
     # REST JSON API (M1+M2 — JWT-protected, for the React SPA)
@@ -241,8 +301,11 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     app.include_router(meetings_api_router)
     app.include_router(analytics_api_router)
     app.include_router(billing_api_router)
+    app.include_router(dashboard_api_router)
     app.include_router(mailboxes_api_router)
     app.include_router(orphaned_api_router)
+    app.include_router(outbox_api_router)
+    app.include_router(operations_api_router)
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):
@@ -250,14 +313,29 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
         # operator console (when enabled) lives at /engagements.
         return RedirectResponse(url="/app/", status_code=302)
 
-    # Serve the React SPA (M3) at /app/* if it's been built.
+    # Serve the React SPA (M3). Static assets are returned directly, and
+    # client-side routes like /app/login fall back to index.html.
     dashboard_dist = STATIC_DIR / "dashboard"
     if dashboard_dist.exists():
-        app.mount(
-            "/app",
-            StaticFiles(directory=str(dashboard_dist), html=True),
-            name="dashboard",
-        )
+        dashboard_root = dashboard_dist.resolve()
+        dashboard_index = dashboard_root / "index.html"
+
+        @app.get("/app", include_in_schema=False)
+        @app.get("/app/", include_in_schema=False)
+        def dashboard_index_route():
+            return FileResponse(dashboard_index)
+
+        @app.get("/app/{path:path}", include_in_schema=False)
+        def dashboard_spa_route(path: str):
+            requested = (dashboard_root / path).resolve()
+            if requested.is_file() and dashboard_root in requested.parents:
+                return FileResponse(requested)
+            return FileResponse(dashboard_index)
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        def favicon():
+            icon = dashboard_root / "brand" / "attainlly-icon.png"
+            return FileResponse(icon if icon.exists() else dashboard_index)
 
     @app.get("/healthz")
     def healthz():
@@ -267,22 +345,20 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
             "email_adapter": email_adapter_info,
         }
 
+    @app.get("/readyz")
+    def readyz(deep: bool = False):
+        from cockpit.services.readiness import ProductionReadiness, runtime_dependency_checks
+
+        extra_checks = runtime_dependency_checks(store=store, env=os.environ) if deep else None
+        report = ProductionReadiness(env=os.environ).evaluate(extra_checks=extra_checks)
+        return {
+            "ok": report.is_production_ready,
+            "missing_required": report.missing_required,
+            "warning_count": report.warning_count,
+        }
+
     @app.get("/adapter")
     def adapter_info():
         return email_adapter_info
-
-    @app.get("/oauth/status")
-    def oauth_status_page():
-        import json as _json
-        token_path = os.getenv("AUTOREACH_GMAIL_TOKEN_PATH", "token.json")
-        from engine import JsonFileTokenStore
-        from pathlib import Path as _Path
-        store = JsonFileTokenStore(token_path=token_path)
-        return {
-            "configured": bool(os.getenv("GOOGLE_CLIENT_ID")),
-            "token_exists": _Path(token_path).exists(),
-            "token_invalid": store.is_invalid(),
-            "sender": os.getenv("AUTOREACH_GMAIL_SENDER", ""),
-        }
 
     return app

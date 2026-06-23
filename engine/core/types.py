@@ -214,6 +214,7 @@ class EventKind(str, Enum):
     EMAIL_DRY_RUN = "email.dry_run"
     EMAIL_RATE_LIMITED = "email.rate_limited"
     EMAIL_BOUNCED = "email.bounced"
+    EMAIL_SPAM_COMPLAINT = "email.spam_complaint"
     EMAIL_REPLY_RECEIVED = "email.reply_received"
     REPLY_CLASSIFIED = "reply.classified"
     REPLY_DRAFT_APPROVED = "reply.draft_approved"
@@ -223,6 +224,7 @@ class EventKind(str, Enum):
     MEETING_QUALIFIED = "meeting.qualified"
     MEETING_NO_SHOW = "meeting.no_show"
     MEETING_CANCELLED = "meeting.cancelled"
+    INTENT_PROSPECT_CREATED = "intent.prospect_created"
     # Cost / policy
     COST_DEBITED = "cost.debited"
     BUDGET_EXCEEDED = "budget.exceeded"
@@ -333,3 +335,11 @@ class Meeting:
     status: str = "booked"  # booked | qualified | no_show | cancelled
     booked_at: datetime = field(default_factory=_utcnow)
     notes: str = ""
+
+
+def __getattr__(name: str) -> Any:
+    if name == "TenantContext":
+        from engine.runtime.context import TenantContext
+
+        return TenantContext
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

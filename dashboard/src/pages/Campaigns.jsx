@@ -11,8 +11,10 @@ export default function Campaigns() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     customer_name: "", offer: "", icp_description: "",
+    client_cure: "", allowed_signal_types: "funding_round",
     booking_url: "", monthly_meeting_target: 20,
-    price_per_outcome_cents: 50000, hitl_threshold: 50,
+    price_per_outcome_cents: 50000, monthly_budget_cents: 200000,
+    hitl_threshold: 50,
     personalize_enabled: false,
   });
   const [err, setErr] = useState("");
@@ -26,9 +28,16 @@ export default function Campaigns() {
     e.preventDefault();
     setErr("");
     try {
-      await api.post("/api/campaigns", form);
+      const payload = {
+        ...form,
+        allowed_signal_types: form.allowed_signal_types
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      };
+      await api.post("/api/campaigns", payload);
       setShowForm(false);
-      setForm({ ...form, customer_name: "", offer: "", icp_description: "" });
+      setForm({ ...form, customer_name: "", offer: "", icp_description: "", client_cure: "" });
       load();
     } catch (e) {
       setErr(e.message);
@@ -54,10 +63,15 @@ export default function Campaigns() {
           <label>Customer name<input value={form.customer_name} onChange={upd("customer_name")} required /></label>
           <label>Offer<textarea rows="2" value={form.offer} onChange={upd("offer")} required /></label>
           <label>ICP description<textarea rows="2" value={form.icp_description} onChange={upd("icp_description")} required /></label>
+          <label>Client cure<textarea rows="2" value={form.client_cure} onChange={upd("client_cure")} placeholder="The specific pain this offer solves right now" /></label>
+          <label>Allowed signal types<input value={form.allowed_signal_types} onChange={upd("allowed_signal_types")} placeholder="funding_round, job_posting" /></label>
           <label>Booking URL<input value={form.booking_url} onChange={upd("booking_url")} placeholder="https://cal.com/you" /></label>
           <div className="row3">
             <label>Meeting target<input type="number" value={form.monthly_meeting_target} onChange={upd("monthly_meeting_target", true)} /></label>
             <label>Price/meeting (cents)<input type="number" value={form.price_per_outcome_cents} onChange={upd("price_per_outcome_cents", true)} /></label>
+            <label>Monthly budget (cents)<input type="number" value={form.monthly_budget_cents} onChange={upd("monthly_budget_cents", true)} /></label>
+          </div>
+          <div className="row3">
             <label>HITL threshold<input type="number" value={form.hitl_threshold} onChange={upd("hitl_threshold", true)} /></label>
           </div>
           <label className="checkbox">

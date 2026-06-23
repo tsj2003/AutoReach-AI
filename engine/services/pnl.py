@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from engine.core.protocols import CostLedger, Store
-from engine.core.types import Engagement
+from engine.core.types import CostEntry, Engagement
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,12 @@ class PnLReport:
     cost_cents: int
     margin_cents: int
     margin_pct: float  # 0..1 of revenue, or 0.0 if revenue is 0
+    cost_by_category_cents: dict[str, int]
+    cost_per_qualified_outcome_cents: int | None
+    profit_per_qualified_outcome_cents: int | None
+    budget_remaining_cents: int | None
+    budget_spent_pct: float | None
+    over_budget: bool
 
     @property
     def revenue_dollars(self) -> float:
@@ -77,9 +83,19 @@ class PnLService:
         price = eng.price_per_outcome_cents or 0
         revenue = qualified * price
 
-        cost = self._ledger.total_spent_cents(engagement_id)
+        cost_entries = list(self._ledger.list_recent(engagement_id, limit=10_000))
+        cost_by_category = self._cost_by_category(cost_entries)
+        cost = sum(cost_by_category.values())
+        if not cost_entries:
+            cost = self._ledger.total_spent_cents(engagement_id)
         margin = revenue - cost
         margin_pct = (margin / revenue) if revenue > 0 else 0.0
+        budget_remaining = self._ledger.remaining_budget_cents(engagement_id)
+        budget = eng.monthly_budget_cents
+        budget_spent_pct = (cost / budget) if budget and budget > 0 else None
+        over_budget = bool(budget is not None and cost > budget)
+        cost_per_qualified = (cost // qualified) if qualified > 0 else None
+        profit_per_qualified = ((revenue - cost) // qualified) if qualified > 0 else None
 
         return PnLReport(
             engagement_id=eng.id,
@@ -95,6 +111,12 @@ class PnLService:
             cost_cents=cost,
             margin_cents=margin,
             margin_pct=margin_pct,
+            cost_by_category_cents=cost_by_category,
+            cost_per_qualified_outcome_cents=cost_per_qualified,
+            profit_per_qualified_outcome_cents=profit_per_qualified,
+            budget_remaining_cents=budget_remaining,
+            budget_spent_pct=budget_spent_pct,
+            over_budget=over_budget,
         )
 
     def report_all(self) -> Iterable[PnLReport]:
@@ -102,3 +124,10 @@ class PnLService:
             r = self.report_for(eng.id)
             if r is not None:
                 yield r
+
+    @staticmethod
+    def _cost_by_category(entries: Iterable[CostEntry]) -> dict[str, int]:
+        totals: dict[str, int] = {}
+        for entry in entries:
+            totals[entry.category] = totals.get(entry.category, 0) + entry.amount_cents
+        return totals

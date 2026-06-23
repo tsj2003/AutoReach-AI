@@ -50,19 +50,23 @@ def test_auto_rotate_pauses_unhealthy_and_activates_reserve(storage):
                                status="active", created_at=now, updated_at=now))
     store.save_mailbox(Mailbox(id="reserve", tenant_id="t", email_address="b@x.com",
                                status="warming", created_at=now, updated_at=now))
-    # Make the engine think there's a high bounce rate (shared event log).
+    # Make the engine think primary has a high bounce rate.
     for i in range(10):
-        events.emit(Event(id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e"))
+        events.emit(Event(
+            id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e",
+            payload={"mailbox_id": "primary"},
+        ))
     for i in range(3):
-        events.emit(Event(id=f"b{i}", kind=EventKind.EMAIL_BOUNCED, engagement_id="e"))
+        events.emit(Event(
+            id=f"b{i}", kind=EventKind.EMAIL_BOUNCED, engagement_id="e",
+            payload={"mailbox_id": "primary"},
+        ))
 
     mon = MailboxHealthMonitor(store=store, events=events)
     rotated_in = mon.auto_rotate("primary")
     # Primary paused.
     assert store.get_mailbox("primary").status == "paused"
-    # With a 30% bounce rate, the reserve is also "unhealthy" by the shared-log
-    # heuristic, so rotation may decline — assert the pause happened regardless.
-    assert rotated_in in (None, "reserve")
+    assert rotated_in == "reserve"
 
 
 def test_auto_rotate_noop_when_healthy(storage):
@@ -71,7 +75,10 @@ def test_auto_rotate_noop_when_healthy(storage):
     store.save_mailbox(Mailbox(id="m", tenant_id="t", email_address="a@x.com",
                                status="active", created_at=now, updated_at=now))
     for i in range(10):
-        events.emit(Event(id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e"))
+        events.emit(Event(
+            id=f"s{i}", kind=EventKind.EMAIL_SENT, engagement_id="e",
+            payload={"mailbox_id": "m"},
+        ))
     mon = MailboxHealthMonitor(store=store, events=events)
     assert mon.auto_rotate("m") is None  # healthy → no rotation
     assert store.get_mailbox("m").status == "active"

@@ -1,0 +1,162 @@
+name: autoreach-ai
+region: nyc
+
+services:
+  - name: autoreach-web
+    github:
+      repo: tsj2003/AutoReach-AI
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /healthz
+    routes:
+      - path: /
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${autoreach-db.DATABASE_URL}
+      - key: REDIS_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${autoreach-redis.REDIS_URL}
+      - key: AUTOREACH_ENABLE_CONSOLE
+        scope: RUN_AND_BUILD_TIME
+        value: "0"
+      - key: AUTOREACH_RUNTIME_SMART_DISPATCH
+        scope: RUN_AND_BUILD_TIME
+        value: "1"
+      - key: AUTOREACH_WORKER_QUEUES
+        scope: RUN_AND_BUILD_TIME
+        value: engine,maintenance,standard-agents
+      - key: AUTOREACH_PUBLIC_BASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: https://REPLACE_WITH_YOUR_DO_APP_DOMAIN
+      - key: AUTOREACH_JWT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GENERATED_SECRET
+      - key: AUTOREACH_SESSION_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GENERATED_SECRET
+      - key: AUTOREACH_CREDENTIAL_ENCRYPTION_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GENERATED_FERNET_KEY
+      - key: GEMINI_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GEMINI_API_KEY
+      - key: GOOGLE_CLIENT_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_CLIENT_ID
+      - key: GOOGLE_CLIENT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_CLIENT_SECRET
+      - key: GOOGLE_SIGNIN_CLIENT_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_SIGNIN_CLIENT_ID_OR_GOOGLE_CLIENT_ID
+      - key: CALCOM_WEBHOOK_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_CALCOM_WEBHOOK_SECRET
+      - key: AUTOREACH_PHOENIX_ENDPOINT
+        scope: RUN_AND_BUILD_TIME
+        value: ""
+      - key: AUTOREACH_INTENT_DUCKDB_PATH
+        scope: RUN_AND_BUILD_TIME
+        value: ""
+      - key: AUTOREACH_INTENT_HOURS_BACK
+        scope: RUN_AND_BUILD_TIME
+        value: "24"
+      - key: SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: ""
+
+workers:
+  - name: autoreach-worker
+    github:
+      repo: tsj2003/AutoReach-AI
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    run_command: celery -A celery_worker.celery_app worker --loglevel=info --concurrency=2 -Q engine,maintenance,standard-agents
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${autoreach-db.DATABASE_URL}
+      - key: REDIS_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${autoreach-redis.REDIS_URL}
+      - key: AUTOREACH_JWT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GENERATED_SECRET
+      - key: AUTOREACH_CREDENTIAL_ENCRYPTION_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GENERATED_FERNET_KEY
+      - key: AUTOREACH_RUNTIME_SMART_DISPATCH
+        scope: RUN_AND_BUILD_TIME
+        value: "1"
+      - key: AUTOREACH_WORKER_QUEUES
+        scope: RUN_AND_BUILD_TIME
+        value: engine,maintenance,standard-agents
+      - key: GEMINI_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GEMINI_API_KEY
+      - key: AUTOREACH_PHOENIX_ENDPOINT
+        scope: RUN_AND_BUILD_TIME
+        value: ""
+      - key: AUTOREACH_INTENT_DUCKDB_PATH
+        scope: RUN_AND_BUILD_TIME
+        value: ""
+      - key: AUTOREACH_INTENT_HOURS_BACK
+        scope: RUN_AND_BUILD_TIME
+        value: "24"
+
+  - name: autoreach-beat
+    github:
+      repo: tsj2003/AutoReach-AI
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    run_command: celery -A celery_worker.celery_app beat --loglevel=info
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${autoreach-db.DATABASE_URL}
+      - key: REDIS_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${autoreach-redis.REDIS_URL}
+      - key: AUTOREACH_CREDENTIAL_ENCRYPTION_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: REPLACE_WITH_GENERATED_FERNET_KEY
+
+databases:
+  - name: autoreach-db
+    engine: PG
+    version: "15"
+    production: false
+    cluster_name: autoreach-db
+    db_name: autoreach
+    db_user: autoreach
+
+  - name: autoreach-redis
+    engine: REDIS
+    version: "7"
+    production: false
+    cluster_name: autoreach-redis

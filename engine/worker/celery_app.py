@@ -48,6 +48,8 @@ celery_app.conf.update(
     task_routes={
         "engine.tick_engagement": {"queue": "engine"},
         "engine.poll_replies": {"queue": "engine"},
+        "engine.intent_ingest_campaign": {"queue": "engine"},
+        "engine.tasks.dispatch_agent_task": {"queue": "standard-agents"},
         "engine.tick_all_active": {"queue": "engine"},
         "engine.reset_daily_caps": {"queue": "maintenance"},
         "engine.warmup_tick_all": {"queue": "maintenance"},
@@ -71,25 +73,33 @@ celery_app.conf.update(
 
 def _build_runtime():
     """Rebuild the engine runtime + services from env config inside a task."""
+    from engine.telemetry.provider import setup_phoenix_telemetry_from_env
     from engine import (
         AdapterRegistry, ConsoleEmailAdapter, EngineRuntime,
         JsonFileTokenStore, OutboundAgentV1, RealGmailSendAdapter, open_storage,
     )
 
+    setup_phoenix_telemetry_from_env()
+
     db_url = os.getenv("DATABASE_URL") or os.getenv("AUTOREACH_DB", "sqlite:///autoreach_engine.db")
     store, events, ledger = open_storage(db_url)
 
     # Choose adapter the same way the cockpit does.
-    token_path = os.getenv("AUTOREACH_GMAIL_TOKEN_PATH")
-    sender = os.getenv("AUTOREACH_GMAIL_SENDER", "")
-    if token_path and sender:
-        adapter = RealGmailSendAdapter(
-            sender_email=sender,
-            token_store=JsonFileTokenStore(token_path=token_path),
-            dry_run=os.getenv("AUTOREACH_GMAIL_DRY_RUN", "").lower() in ("1", "true", "yes"),
-        )
+    if os.getenv("AUTOREACH_RUNTIME_SMART_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on"):
+        from engine.dispatch import SmartRoutedEmailAdapter
+
+        adapter = SmartRoutedEmailAdapter(store=store, events=events, ledger=ledger)
     else:
-        adapter = ConsoleEmailAdapter()
+        token_path = os.getenv("AUTOREACH_GMAIL_TOKEN_PATH")
+        sender = os.getenv("AUTOREACH_GMAIL_SENDER", "")
+        if token_path and sender:
+            adapter = RealGmailSendAdapter(
+                sender_email=sender,
+                token_store=JsonFileTokenStore(token_path=token_path),
+                dry_run=os.getenv("AUTOREACH_GMAIL_DRY_RUN", "").lower() in ("1", "true", "yes"),
+            )
+        else:
+            adapter = ConsoleEmailAdapter()
 
     runtime = EngineRuntime(
         store=store, events=events, ledger=ledger,
@@ -101,10 +111,10 @@ def _build_runtime():
 
 @celery_app.task(name="engine.tick_engagement", bind=True, max_retries=3, default_retry_delay=60)
 def tick_engagement(self, engagement_id: str):
-    """Run one plan+execute tick. Engagement-scoped is logical; runtime ticks globally."""
+    """Run one plan+execute tick for a single engagement."""
     runtime, *_ = _build_runtime()
     try:
-        return runtime.tick()
+        return runtime.tick(engagement_id=engagement_id)
     except Exception as exc:
         logger.exception("tick_engagement failed for %s", engagement_id)
         raise self.retry(exc=exc)
@@ -115,11 +125,22 @@ def poll_replies(self, engagement_id: str):
     """Run a Gmail reply-detection pass for an engagement."""
     from engine.llm import GeminiClient
     from engine.adapters.gmail_token_store import JsonFileTokenStore
-    from engine.services import GmailReplyDetector
+    from engine.services import GmailReplyDetector, TenantMailboxReplyDetector
 
     runtime, store, events, ledger = _build_runtime()
     from engine.services import OperationsService
     ops = OperationsService(store=store, events=events)
+
+    if os.getenv("AUTOREACH_RUNTIME_SMART_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on"):
+        detector = TenantMailboxReplyDetector(
+            store=store,
+            events=events,
+            ledger=ledger,
+            ops=ops,
+            gemini=GeminiClient(),
+        )
+        result = detector.poll(engagement_id)
+        return {"replies_recorded": result.replies_recorded, "scanned": result.prospects_scanned}
 
     token_path = os.getenv("AUTOREACH_GMAIL_TOKEN_PATH")
     sender = os.getenv("AUTOREACH_GMAIL_SENDER", "")
@@ -133,6 +154,38 @@ def poll_replies(self, engagement_id: str):
     )
     result = detector.poll(engagement_id)
     return {"replies_recorded": result.replies_recorded, "scanned": result.prospects_scanned}
+
+
+@celery_app.task(name="engine.intent_ingest_campaign", bind=True, max_retries=3, default_retry_delay=60)
+def intent_ingest_campaign(
+    self,
+    *,
+    tenant_id: str,
+    engagement_id: str,
+    duckdb_path: str | None = None,
+    hours_back: int | None = None,
+):
+    """Ingest recent tenant intent signals into campaign prospects."""
+    from engine.intent.ingestor import IntentProspectIngestor
+    from engine.intent.repository import DuckDBIntentRepository
+
+    _, store, events, _ = _build_runtime()
+    resolved_duckdb_path = duckdb_path or os.getenv("AUTOREACH_INTENT_DUCKDB_PATH")
+    if not resolved_duckdb_path:
+        raise ValueError("AUTOREACH_INTENT_DUCKDB_PATH is required")
+    resolved_hours_back = int(hours_back or os.getenv("AUTOREACH_INTENT_HOURS_BACK", "24"))
+    repository = DuckDBIntentRepository(db_path=resolved_duckdb_path)
+    ingestor = IntentProspectIngestor(store=store, events=events, repository=repository)
+    try:
+        result = ingestor.ingest_campaign(
+            tenant_id=tenant_id,
+            engagement_id=engagement_id,
+            hours_back=resolved_hours_back,
+        )
+        return result.model_dump()
+    except Exception as exc:
+        logger.exception("intent_ingest_campaign failed tenant=%s engagement=%s", tenant_id, engagement_id)
+        raise self.retry(exc=exc)
 
 
 @celery_app.task(name="engine.tick_all_active")
@@ -151,27 +204,20 @@ def reset_daily_caps():
 
     _, store, _, _ = _build_runtime()
     count = 0
-    # No global mailbox list yet — iterate per known tenant via engagements.
-    seen_tenants = set()
-    for eng in store.list_engagements():
-        tid = getattr(eng, "tenant_id", None)
-        if not tid or tid in seen_tenants:
-            continue
-        seen_tenants.add(tid)
-        for mb in store.list_mailboxes(tid):
-            if mb.emails_sent_today != 0:
-                store.save_mailbox(Mailbox(
-                    id=mb.id, tenant_id=mb.tenant_id, user_id=mb.user_id,
-                    provider=mb.provider, email_address=mb.email_address,
-                    display_name=mb.display_name, credentials_json=mb.credentials_json,
-                    oauth_client_id=mb.oauth_client_id, oauth_client_secret=mb.oauth_client_secret,
-                    max_emails_per_day=mb.max_emails_per_day, emails_sent_today=0,
-                    last_send_reset=datetime.now(timezone.utc), warmup_day=mb.warmup_day,
-                    status=mb.status, reputation_score=mb.reputation_score,
-                    last_error=mb.last_error, created_at=mb.created_at,
-                    updated_at=datetime.now(timezone.utc),
-                ))
-                count += 1
+    for mb in store.list_all_mailboxes():
+        if mb.emails_sent_today != 0:
+            store.save_mailbox(Mailbox(
+                id=mb.id, tenant_id=mb.tenant_id, user_id=mb.user_id,
+                provider=mb.provider, email_address=mb.email_address,
+                display_name=mb.display_name, credentials_json=mb.credentials_json,
+                oauth_client_id=mb.oauth_client_id, oauth_client_secret=mb.oauth_client_secret,
+                max_emails_per_day=mb.max_emails_per_day, emails_sent_today=0,
+                last_send_reset=datetime.now(timezone.utc), warmup_day=mb.warmup_day,
+                status=mb.status, reputation_score=mb.reputation_score,
+                last_error=mb.last_error, created_at=mb.created_at,
+                updated_at=datetime.now(timezone.utc),
+            ))
+            count += 1
     return {"reset": count}
 
 
@@ -183,11 +229,6 @@ def warmup_tick_all():
     _, store, events, _ = _build_runtime()
     mon = MailboxHealthMonitor(store=store, events=events)
     total = 0
-    seen = set()
-    for eng in store.list_engagements():
-        tid = getattr(eng, "tenant_id", None)
-        if not tid or tid in seen:
-            continue
-        seen.add(tid)
+    for tid in {mb.tenant_id for mb in store.list_all_mailboxes() if mb.tenant_id}:
         total += mon.warmup_tick(tid)
     return {"advanced": total}

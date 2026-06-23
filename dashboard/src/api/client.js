@@ -18,6 +18,20 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_KEY);
 }
 
+export function getTenantId() {
+  const token = getAccessToken();
+  if (!token) return "";
+  try {
+    const [, payload] = token.split(".");
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const decoded = JSON.parse(window.atob(padded));
+    return decoded.tenant_id || "";
+  } catch (_) {
+    return "";
+  }
+}
+
 async function refreshAccessToken() {
   const refresh = getRefreshToken();
   if (!refresh) return false;
@@ -65,7 +79,7 @@ export async function apiFetch(path, options = {}, retry = true) {
 
 // Convenience helpers
 export const api = {
-  get: (p) => apiFetch(p),
+  get: (p, options = {}) => apiFetch(p, options),
   post: (p, body) => apiFetch(p, { method: "POST", body: JSON.stringify(body) }),
   patch: (p, body) => apiFetch(p, { method: "PATCH", body: JSON.stringify(body) }),
   del: (p) => apiFetch(p, { method: "DELETE" }),

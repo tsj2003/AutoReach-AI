@@ -3,8 +3,8 @@
 Tokens carry: sub (user_id), tenant_id, email, role, plan, type, exp.
 Access tokens expire in 24 h; refresh tokens in 30 days.
 
-Secret: AUTOREACH_JWT_SECRET env var. Falls back to a dev default that
-ALWAYS logs a loud warning — never silently pass weak secrets to prod.
+Secret: AUTOREACH_JWT_SECRET env var. Local/dev falls back to a dev default
+with a loud warning; production-like deployments fail closed.
 """
 
 from __future__ import annotations
@@ -38,6 +38,9 @@ class UnauthorizedError(AuthError):
 
 def _secret() -> str:
     s = os.getenv("AUTOREACH_JWT_SECRET", "").strip()
+    production_like = _production_like()
+    if production_like and (not s or s == _DEV_SECRET):
+        raise AuthError("AUTOREACH_JWT_SECRET is required in production")
     if not s:
         logger.warning(
             "AUTOREACH_JWT_SECRET not set — using insecure default. "
@@ -45,6 +48,14 @@ def _secret() -> str:
         )
         return _DEV_SECRET
     return s
+
+
+def _production_like() -> bool:
+    console_disabled = os.getenv("AUTOREACH_ENABLE_CONSOLE", "").strip().lower() in {
+        "0", "false", "no", "off",
+    }
+    database_url = os.getenv("DATABASE_URL", "").strip().lower()
+    return console_disabled and bool(database_url) and not database_url.startswith("sqlite:")
 
 
 def sign_jwt(

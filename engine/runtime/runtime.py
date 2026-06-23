@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 from engine.core.protocols import (
     AgentRunner,
@@ -31,6 +31,12 @@ from engine.core.protocols import (
 )
 from engine.core.state import IllegalTransition, JobState, JobStateMachine
 from engine.core.types import Agent, Event, EventKind, Job, JobKind
+from engine.runtime.context import (
+    ExecutionResult,
+    LocalWorkerContext,
+    TenantContext,
+    WorkerExecutionContext,
+)
 from engine.runtime.contexts import DefaultAdapterContext, DefaultAgentContext
 from engine.runtime.registry import AdapterRegistry
 from engine.runtime.results import AdapterResultData
@@ -44,6 +50,57 @@ def _new_id(prefix: str) -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class AgentEngineRuntime:
+    """Tenant-scoped async runtime for the new worker execution architecture."""
+
+    def __init__(self, *, execution_context: Optional[WorkerExecutionContext] = None) -> None:
+        self._execution_context = execution_context or LocalWorkerContext()
+
+    async def tick_campaign(
+        self,
+        *,
+        tenant_context: TenantContext,
+        engagement_id: str,
+    ) -> ExecutionResult:
+        """Run one campaign-scoped agent tick without touching global state."""
+        try:
+            result = await self._execution_context.execute_task(
+                task_name="campaign_tick",
+                payload={"engagement_id": engagement_id},
+                context=tenant_context,
+            )
+        except Exception as exc:
+            message = str(exc)
+            await self._log_tenant_error(tenant_context.tenant_id, message)
+            return ExecutionResult(success=False, error=message)
+
+        if result.success:
+            output = result.output if isinstance(result.output, dict) else {"result": result.output}
+            await self._queue_to_outbox(
+                tenant_context,
+                output,
+                result.trace_id,
+            )
+        else:
+            await self._log_tenant_error(
+                tenant_context.tenant_id,
+                result.error or "unknown execution failure",
+            )
+        return result
+
+    async def _queue_to_outbox(
+        self,
+        tenant_context: TenantContext,
+        output: dict[str, Any],
+        trace_id: Optional[str],
+    ) -> None:
+        """Hook for persisting successful agent output into the outbox."""
+
+    async def _log_tenant_error(self, tenant_id: str, error: str) -> None:
+        """Hook for tenant-scoped failure logging."""
+        logger.warning("tenant task failed tenant_id=%s error=%s", tenant_id, error)
 
 
 class EngineRuntime:
@@ -105,20 +162,49 @@ class EngineRuntime:
             new_count += 1
         return new_count
 
-    def plan_all(self) -> int:
-        """Run plan() for every active agent across every active engagement."""
+    def plan_all(
+        self,
+        *,
+        tenant_id: Optional[str] = None,
+        engagement_id: Optional[str] = None,
+    ) -> int:
+        """
+        Run plan() for active agents in the requested scope.
+
+        Passing `tenant_id` and/or `engagement_id` is the SaaS-safe path. The
+        unscoped default remains for the trusted single-operator cockpit and
+        older tests.
+        """
         total = 0
-        for engagement in self._store.list_engagements(status="active"):
+        if engagement_id is not None:
+            engagement = self._store.get_engagement(engagement_id, tenant_id=tenant_id)
+            engagements = [engagement] if engagement is not None and engagement.status == "active" else []
+        else:
+            engagements = self._store.list_engagements(status="active", tenant_id=tenant_id)
+
+        for engagement in engagements:
             for agent in self._store.list_agents(engagement.id):
                 if agent.status != "active":
                     continue
                 total += self.plan_for_agent(agent)
         return total
 
-    def execute_due_jobs(self, *, limit: int = 50) -> int:
+    def execute_due_jobs(
+        self,
+        *,
+        limit: int = 50,
+        tenant_id: Optional[str] = None,
+        engagement_id: Optional[str] = None,
+    ) -> int:
         """Pick due jobs and execute them. Returns count of jobs executed."""
         executed = 0
-        for job in list(self._store.list_due_jobs(limit=limit)):
+        for job in list(
+            self._store.list_due_jobs(
+                limit=limit,
+                tenant_id=tenant_id,
+                engagement_id=engagement_id,
+            )
+        ):
             try:
                 self._execute_one(job)
             except Exception:
@@ -128,20 +214,31 @@ class EngineRuntime:
             executed += 1
         return executed
 
-    def tick(self) -> dict[str, int]:
+    def tick(
+        self,
+        *,
+        tenant_id: Optional[str] = None,
+        engagement_id: Optional[str] = None,
+    ) -> dict[str, int]:
         """One full cycle: plan + execute one batch."""
-        planned = self.plan_all()
-        executed = self.execute_due_jobs()
+        planned = self.plan_all(tenant_id=tenant_id, engagement_id=engagement_id)
+        executed = self.execute_due_jobs(tenant_id=tenant_id, engagement_id=engagement_id)
         return {"planned": planned, "executed": executed}
 
-    def run_once(self, *, max_iters: int = 50) -> dict[str, int]:
+    def run_once(
+        self,
+        *,
+        max_iters: int = 50,
+        tenant_id: Optional[str] = None,
+        engagement_id: Optional[str] = None,
+    ) -> dict[str, int]:
         """
         Drain: keep ticking until no jobs are executed in a tick.
         Bounded by max_iters as a safety against infinite planning loops.
         """
         totals = {"planned": 0, "executed": 0, "iterations": 0}
         for _ in range(max_iters):
-            r = self.tick()
+            r = self.tick(tenant_id=tenant_id, engagement_id=engagement_id)
             totals["planned"] += r["planned"]
             totals["executed"] += r["executed"]
             totals["iterations"] += 1
@@ -149,10 +246,18 @@ class EngineRuntime:
                 break
         return totals
 
-    def approve_job(self, job_id: str) -> bool:
+    def approve_job(
+        self,
+        job_id: str,
+        *,
+        tenant_id: Optional[str] = None,
+        engagement_id: Optional[str] = None,
+    ) -> bool:
         """HITL gate: move a job from awaiting_approval to approved."""
         job = self._store.get_job(job_id)
         if job is None or job.state != JobState.AWAITING_APPROVAL.value:
+            return False
+        if not self._job_in_scope(job, tenant_id=tenant_id, engagement_id=engagement_id):
             return False
         job.state = JobStateMachine.transition(job.state, JobState.APPROVED).value
         self._store.save_job(job)
@@ -165,10 +270,19 @@ class EngineRuntime:
         )
         return True
 
-    def reject_job(self, job_id: str, *, reason: str = "") -> bool:
+    def reject_job(
+        self,
+        job_id: str,
+        *,
+        reason: str = "",
+        tenant_id: Optional[str] = None,
+        engagement_id: Optional[str] = None,
+    ) -> bool:
         """HITL gate: terminally reject a job awaiting approval."""
         job = self._store.get_job(job_id)
         if job is None or job.state != JobState.AWAITING_APPROVAL.value:
+            return False
+        if not self._job_in_scope(job, tenant_id=tenant_id, engagement_id=engagement_id):
             return False
         job.state = JobStateMachine.transition(job.state, JobState.REJECTED).value
         job.last_error = reason or "rejected by operator"
@@ -184,6 +298,19 @@ class EngineRuntime:
         return True
 
     # ───────────────────── Internals ─────────────────────
+
+    def _job_in_scope(
+        self,
+        job: Job,
+        *,
+        tenant_id: Optional[str],
+        engagement_id: Optional[str],
+    ) -> bool:
+        if engagement_id is not None and job.engagement_id != engagement_id:
+            return False
+        if tenant_id is not None:
+            return self._store.get_engagement(job.engagement_id, tenant_id=tenant_id) is not None
+        return True
 
     def _execute_one(self, job: Job) -> None:
         # 1. HITL gate — if the job needs approval and is still pending, park it.

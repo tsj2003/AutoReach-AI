@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request
 
-from engine.auth.jwt_handler import InvalidTokenError, decode_jwt
+from engine.auth.jwt_handler import AuthError, InvalidTokenError, decode_jwt
 from engine.auth.models import CurrentUser
 
 
@@ -32,6 +32,8 @@ async def get_current_user_dep(request: Request) -> CurrentUser:
         payload = decode_jwt(token)
     except InvalidTokenError as exc:
         raise HTTPException(401, str(exc)) from exc
+    except AuthError as exc:
+        raise HTTPException(503, "JWT signing secret is not configured") from exc
 
     return CurrentUser(
         user_id=payload["sub"],
