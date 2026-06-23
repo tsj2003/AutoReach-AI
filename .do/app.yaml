@@ -33,7 +33,7 @@ services:
         value: engine,maintenance,standard-agents
       - key: AUTOREACH_PUBLIC_BASE_URL
         scope: RUN_AND_BUILD_TIME
-        value: https://REPLACE_WITH_YOUR_DO_APP_DOMAIN
+        value: https://autoreach-ai-j2rdy.ondigitalocean.app
       - key: AUTOREACH_JWT_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET
