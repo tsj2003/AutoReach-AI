@@ -156,7 +156,7 @@ databases:
     db_user: autoreach
 
   - name: autoreach-redis
-    engine: REDIS
-    version: "7"
+    engine: VALKEY
+    version: "8"
     production: true
     cluster_name: autoreach-redis
