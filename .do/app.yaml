@@ -150,7 +150,7 @@ databases:
   - name: autoreach-db
     engine: PG
     version: "15"
-    production: false
+    production: true
     cluster_name: autoreach-db
     db_name: autoreach
     db_user: autoreach
