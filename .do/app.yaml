@@ -152,8 +152,6 @@ databases:
     version: "15"
     production: true
     cluster_name: autoreach-db
-    db_name: autoreach
-    db_user: autoreach
 
   - name: autoreach-redis
     engine: VALKEY
