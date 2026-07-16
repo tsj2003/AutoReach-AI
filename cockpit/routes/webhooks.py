@@ -69,9 +69,10 @@ async def calcom_booking_webhook(
     """
     body = await request.body()
     webhook_secret = os.getenv("CALCOM_WEBHOOK_SECRET", "").strip()
-    production_mode = os.getenv("AUTOREACH_ENABLE_CONSOLE", "1").strip().lower() in {
-        "0", "false", "no", "off",
-    }
+    # Production = console disabled. Read the app's already-resolved console
+    # state (secure by default) rather than re-parsing the env, so the two stay
+    # consistent. Missing state → treat as production (fail shut).
+    production_mode = not bool(getattr(request.app.state, "console_enabled", False))
 
     # Signature verification
     if webhook_secret:

@@ -61,9 +61,14 @@ def test_signup_creates_tenant_and_returns_jwt(client):
 def test_signup_fails_closed_without_jwt_secret_in_production_like_env(tmp_path, monkeypatch):
     from cockpit import create_app
 
+    from cryptography.fernet import Fernet
+
     monkeypatch.delenv("AUTOREACH_JWT_SECRET", raising=False)
     monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db/autoreach")
+    # Production also requires the credential encryption key; set it so we reach
+    # the JWT check this test is about rather than the encryption boot guard.
+    monkeypatch.setenv("AUTOREACH_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode())
     app = create_app(db_url=f"sqlite:///{tmp_path / 'prod_auth_missing_secret.db'}")
     prod_client = TestClient(app, raise_server_exceptions=True)
 
@@ -80,9 +85,12 @@ def test_signup_fails_closed_without_jwt_secret_in_production_like_env(tmp_path,
 def test_signup_rejects_dev_jwt_secret_in_production_like_env(tmp_path, monkeypatch):
     from cockpit import create_app
 
+    from cryptography.fernet import Fernet
+
     monkeypatch.setenv("AUTOREACH_JWT_SECRET", "CHANGE_ME_SET_AUTOREACH_JWT_SECRET_IN_ENV")
     monkeypatch.setenv("AUTOREACH_ENABLE_CONSOLE", "0")
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db/autoreach")
+    monkeypatch.setenv("AUTOREACH_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode())
     app = create_app(db_url=f"sqlite:///{tmp_path / 'prod_auth_dev_secret.db'}")
     prod_client = TestClient(app, raise_server_exceptions=True)
 

@@ -14,6 +14,7 @@ from engine.core.protocols import EventSink, Store
 from engine.core.types import Event, EventKind, Prospect
 from engine.intent.models import IntentIngestionResult, IntentSignal
 from engine.intent.repository import DuckDBIntentRepository
+from engine.intent.signal_stack import SignalStackPolicy, StackDecision
 
 
 class IntentProspectIngestor:
@@ -62,23 +63,36 @@ class IntentProspectIngestor:
                     openinference_trace_id=trace_id,
                 )
 
-            signals = self._repository.get_recent_signals(
-                tenant_id=tenant_id,
-                hours_back=hours_back,
-                signal_types=allowed_signal_types,
-                limit=limit,
-            )
+            signals = [
+                s
+                for s in self._repository.get_recent_signals(
+                    tenant_id=tenant_id,
+                    hours_back=hours_back,
+                    signal_types=allowed_signal_types,
+                    limit=limit,
+                )
+                if s.signal_type in allowed_signal_types
+            ]
+
+            # Signal Stack gate: only reach out to an ACCOUNT that clears the
+            # required stack depth. min_signal_stack=1 (default) preserves the
+            # one-allowed-signal-qualifies behavior; >=2 is the differentiator
+            # (fewer, evidence-stacked, higher-reply-rate, deliverability-safe).
+            policy = SignalStackPolicy(min_stack=self._min_stack(engagement.metadata))
+            span.set_attribute("intent.min_signal_stack", policy.min_stack)
 
             created_ids: list[str] = []
             skipped_count = 0
-            for signal in signals:
-                if signal.signal_type not in allowed_signal_types:
+            for domain, account_signals in policy.group_by_account(signals).items():
+                decision = policy.evaluate(account_signals)
+                if not decision.qualifies:
                     skipped_count += 1
                     continue
+
                 prospect_id = self._prospect_id(
                     tenant_id=tenant_id,
                     engagement_id=engagement_id,
-                    signal=signal,
+                    company_domain=domain,
                 )
                 if self._store.get_prospect(prospect_id) is not None:
                     skipped_count += 1
@@ -87,7 +101,7 @@ class IntentProspectIngestor:
                 prospect = self._build_prospect(
                     prospect_id=prospect_id,
                     engagement_id=engagement_id,
-                    signal=signal,
+                    decision=decision,
                     trace_id=trace_id,
                 )
                 self._store.save_prospect(prospect, tenant_id=tenant_id)
@@ -95,7 +109,7 @@ class IntentProspectIngestor:
                     tenant_id=tenant_id,
                     engagement_id=engagement_id,
                     prospect=prospect,
-                    signal=signal,
+                    decision=decision,
                     trace_id=trace_id,
                 )
                 created_ids.append(prospect_id)
@@ -122,16 +136,23 @@ class IntentProspectIngestor:
         return {str(signal_type) for signal_type in raw_types if str(signal_type)}
 
     @staticmethod
-    def _prospect_id(*, tenant_id: str, engagement_id: str, signal: IntentSignal) -> str:
-        source = "|".join(
-            [
-                tenant_id,
-                engagement_id,
-                signal.signal_type,
-                signal.company_domain,
-                signal.timestamp.isoformat(),
-            ]
-        )
+    def _min_stack(metadata: Any) -> int:
+        """Required stacked-signal depth from signal_matrix.min_signal_stack (default 1)."""
+        if not isinstance(metadata, dict):
+            return 1
+        matrix = metadata.get("signal_matrix")
+        if not isinstance(matrix, dict):
+            return 1
+        try:
+            return max(1, int(matrix.get("min_signal_stack", 1)))
+        except (TypeError, ValueError):
+            return 1
+
+    @staticmethod
+    def _prospect_id(*, tenant_id: str, engagement_id: str, company_domain: str) -> str:
+        # Account-keyed: one prospect per (tenant, engagement, account), so
+        # stacked signals converge on a single prospect rather than fragmenting.
+        source = "|".join([tenant_id, engagement_id, company_domain])
         return f"p_intent_{hashlib.sha1(source.encode('utf-8')).hexdigest()[:20]}"
 
     @staticmethod
@@ -139,9 +160,10 @@ class IntentProspectIngestor:
         *,
         prospect_id: str,
         engagement_id: str,
-        signal: IntentSignal,
+        decision: StackDecision,
         trace_id: str,
     ) -> Prospect:
+        signal = decision.primary
         payload = dict(signal.payload)
         email = payload.get("email") or payload.get("contact_email")
         company = payload.get("company") or payload.get("company_name") or signal.company_domain
@@ -169,7 +191,17 @@ class IntentProspectIngestor:
                     "openinference_trace_id": trace_id,
                 }
             },
-            research={"matched_intent_signal": matched_signal},
+            research={
+                "matched_intent_signal": matched_signal,
+                # The stack is the grounding contract: a draft may ONLY reference
+                # these cited triggers, never invented ones.
+                "signal_stack": {
+                    "depth": decision.depth,
+                    "score": decision.score,
+                    "age_hours": round(decision.age_hours, 1),
+                    "evidence": [e.as_dict() for e in decision.evidence],
+                },
+            },
             status="new",
         )
 
@@ -183,7 +215,7 @@ class IntentProspectIngestor:
         tenant_id: str,
         engagement_id: str,
         prospect: Prospect,
-        signal: IntentSignal,
+        decision: StackDecision,
         trace_id: str,
     ) -> None:
         self._events.emit(
@@ -194,8 +226,10 @@ class IntentProspectIngestor:
                 prospect_id=prospect.id,
                 payload={
                     "tenant_id": tenant_id,
-                    "signal_type": signal.signal_type,
-                    "company_domain": signal.company_domain,
+                    "signal_type": decision.primary.signal_type,
+                    "company_domain": decision.company_domain,
+                    "stack_depth": decision.depth,
+                    "stack_score": decision.score,
                     "openinference_trace_id": trace_id,
                 },
             )

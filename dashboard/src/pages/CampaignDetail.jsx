@@ -61,10 +61,10 @@ export default function CampaignDetail() {
     setRoi(null);
     setRoiErr("");
     setRoiLoading(true);
+    // Tenant is derived server-side from the JWT; the presence check above is
+    // just a friendly "are you signed in?" guard.
     api
-      .get(`/api/v1/dashboard/campaigns/${id}/pnl`, {
-        headers: { "X-Tenant-ID": tenantId },
-      })
+      .get(`/api/v1/dashboard/campaigns/${id}/pnl`)
       .then(setRoi)
       .catch((e) => setRoiErr(e.message))
       .finally(() => setRoiLoading(false));

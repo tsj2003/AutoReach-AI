@@ -9,10 +9,13 @@ actual prompts.
 
 from engine.llm.gemini import (  # noqa: F401
     DEFAULT_MODEL,
+    CostBreakdown,
     GeminiClient,
     GeminiError,
     GeminiResult,
     GeminiUnavailable,
+    GeminiUsage,
+    cost_breakdown_for_result,
     estimate_cost_cents,
 )
 from engine.llm.gateway import AgnosticLLMGateway  # noqa: F401
@@ -33,6 +36,9 @@ __all__ = [
     "DEFAULT_MODEL",
     "AgnosticLLMGateway",
     "estimate_cost_cents",
+    "cost_breakdown_for_result",
+    "CostBreakdown",
+    "GeminiUsage",
     "ClassificationResult",
     "classify_and_draft",
     "PersonalizationResult",

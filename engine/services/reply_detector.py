@@ -54,6 +54,7 @@ from engine.core.types import (
 )
 from engine.llm.classifier import ClassificationResult, classify_and_draft
 from engine.llm.gemini import GeminiClient
+from engine.services.bounce_detector import extract_failed_recipient, is_bounce_message
 from engine.services.operations import OperationsService
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ class ReplyDetectionResult:
     fell_back_to_default: int = 0
     llm_cost_cents: int = 0
     token_invalid: bool = False
+    bounces_detected: int = 0
 
 
 class GmailReplyDetector:
@@ -219,6 +221,28 @@ class GmailReplyDetector:
                 return str(ev.payload.get("gmail_thread_id"))
         return None
 
+    def _record_bounce(self, *, engagement_id, prospect, snippet, result) -> None:
+        """Emit EMAIL_BOUNCED for the sending mailbox so health routing reacts."""
+        failed_recipient = extract_failed_recipient(snippet, getattr(prospect, "email", "") or "")
+        self._events.emit(
+            Event(
+                id=_new_id("ev_bounce"),
+                kind=EventKind.EMAIL_BOUNCED,
+                engagement_id=engagement_id,
+                prospect_id=getattr(prospect, "id", None),
+                payload={
+                    # Key to the sending mailbox both ways so check_health matches
+                    # regardless of whether older events used id or email.
+                    "mailbox_id": self._mailbox_id,
+                    "mailbox_email": self._sender,
+                    "sender_email": self._sender,
+                    "failed_recipient": failed_recipient or getattr(prospect, "email", None),
+                    "source": "gmail.dsn",
+                },
+            )
+        )
+        result.bounces_detected += 1
+
     def _poll_one_thread(
         self,
         *,
@@ -272,6 +296,20 @@ class GmailReplyDetector:
                 # Our own message; skip.
                 continue
 
+            # Deliverability guardian: a bounce/DSN means this mailbox failed to
+            # deliver. Record EMAIL_BOUNCED (keyed to the sending mailbox) so the
+            # health gate routes away from a burning domain, and do NOT treat it
+            # as a prospect reply.
+            subject_header = _header(m, "Subject")
+            if is_bounce_message(from_header, subject_header):
+                self._record_bounce(
+                    engagement_id=engagement_id,
+                    prospect=prospect,
+                    snippet=m.get("snippet", ""),
+                    result=result,
+                )
+                continue
+
             # Dedupe — have we already recorded this gmail message id?
             if self._ops._store.get_reply_by_external_id(msg_id) is not None:
                 result.duplicates_skipped += 1
@@ -302,6 +340,10 @@ class GmailReplyDetector:
                         metadata={
                             "purpose": "reply_classify_and_draft",
                             "openinference_trace_id": classification.openinference_trace_id,
+                            "cost_basis": classification.cost_basis,
+                            "cost_micro_usd": classification.cost_micro_usd,
+                            "prompt_tokens": classification.prompt_tokens,
+                            "output_tokens": classification.output_tokens,
                         },
                     )
                 )

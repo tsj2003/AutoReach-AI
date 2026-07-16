@@ -21,9 +21,17 @@ else:
     import dns  # type: ignore[no-redef]
 
 
+# Common DKIM selectors we can probe without knowing the provider's exact one.
+# Google Workspace uses "google"; Microsoft "selector1/2"; others vary.
+_DKIM_SELECTORS = ("google", "default", "selector1", "selector2", "s1", "k1", "dkim", "mail")
+
+
 class PreflightResult(BaseModel):
     is_safe_to_send: bool
     failure_reasons: list[str] = Field(default_factory=list)
+    # Non-blocking advisories (e.g. DKIM, which is selector-specific and can't be
+    # asserted with certainty). Surfaced so the operator fixes it before volume.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class DeliverabilityPreflight:
@@ -32,6 +40,7 @@ class DeliverabilityPreflight:
     async def verify_domain(self, domain: str) -> PreflightResult:
         normalized_domain = domain.strip().lower().rstrip(".")
         failure_reasons: list[str] = []
+        warnings: list[str] = []
 
         spf_records = await self._lookup_txt(normalized_domain)
         if not any("v=spf1" in record.lower() for record in spf_records):
@@ -41,10 +50,27 @@ class DeliverabilityPreflight:
         if not any("v=dmarc1" in record.lower() for record in dmarc_records):
             failure_reasons.append("DMARC missing")
 
+        # DKIM is now mandatory for bulk senders (Google/Yahoo/Microsoft 2024-26)
+        # but is selector-specific, so absence across common selectors is a strong
+        # WARNING rather than a hard failure (a custom selector may still exist).
+        if not await self._has_dkim(normalized_domain):
+            warnings.append(
+                "DKIM not detected on common selectors — confirm DKIM is configured "
+                "for your sending mailbox, or mail may be rejected/spam-foldered."
+            )
+
         return PreflightResult(
             is_safe_to_send=not failure_reasons,
             failure_reasons=failure_reasons,
+            warnings=warnings,
         )
+
+    async def _has_dkim(self, domain: str) -> bool:
+        for selector in _DKIM_SELECTORS:
+            records = await self._lookup_txt(f"{selector}._domainkey.{domain}")
+            if any(("v=dkim1" in r.lower() or "k=rsa" in r.lower() or "p=" in r.lower()) for r in records):
+                return True
+        return False
 
     async def _lookup_txt(self, qname: str) -> list[str]:
         try:

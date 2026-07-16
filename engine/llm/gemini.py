@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,6 +33,23 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _ssl_context() -> Optional[ssl.SSLContext]:
+    """Verified TLS context using certifi's CA bundle when present.
+
+    The stdlib default relies on the OS trust store, which is missing on some
+    Python installs (notably macOS Python.framework) and would fail cert
+    verification. Falling back to certifi keeps real Gemini calls working in dev
+    and any cert-less environment; returns None (stdlib default) if certifi
+    isn't installed. We never disable verification.
+    """
+    try:
+        import certifi  # type: ignore
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # pragma: no cover - depends on env
+        return None
 
 DEFAULT_MODEL = "gemini-2.0-flash"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -44,6 +63,15 @@ class GeminiUnavailable(GeminiError):
     """Raised when no API key is configured (treat as non-fatal at the caller)."""
 
 
+@dataclass(frozen=True)
+class GeminiUsage:
+    """Real token accounting from the API's usageMetadata."""
+
+    prompt_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
 @dataclass
 class GeminiResult:
     """The decoded JSON object from a structured-output Gemini call."""
@@ -51,6 +79,7 @@ class GeminiResult:
     data: dict
     raw_text: str
     model: str
+    usage: Optional[GeminiUsage] = None
 
 
 class GeminiClient:
@@ -123,7 +152,9 @@ class GeminiClient:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=self._timeout) as response:
+            with urllib.request.urlopen(
+                req, timeout=self._timeout, context=_ssl_context()
+            ) as response:
                 body_bytes = response.read()
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")[:500]
@@ -159,7 +190,96 @@ class GeminiClient:
         if not isinstance(decoded, dict):
             raise GeminiError(f"gemini output is not a JSON object (got {type(decoded).__name__})")
 
-        return GeminiResult(data=decoded, raw_text=text, model=chosen_model)
+        usage = None
+        meta = response_data.get("usageMetadata")
+        if isinstance(meta, dict):
+            usage = GeminiUsage(
+                prompt_tokens=int(meta.get("promptTokenCount", 0) or 0),
+                output_tokens=int(meta.get("candidatesTokenCount", 0) or 0),
+                total_tokens=int(meta.get("totalTokenCount", 0) or 0),
+            )
+
+        return GeminiResult(data=decoded, raw_text=text, model=chosen_model, usage=usage)
+
+
+# Gemini token pricing in USD per 1M TOKENS (not chars). Published rates for
+# gemini-2.0-flash as of Jan 2026 — update when Google changes pricing.
+_MODEL_TOKEN_PRICING_USD_PER_M: dict[str, tuple[float, float]] = {
+    "gemini-2.0-flash": (0.10, 0.40),  # (input, output)
+}
+_DEFAULT_TOKEN_PRICING_USD_PER_M = (0.10, 0.40)
+_MICRO_USD_PER_CENT = 10_000  # 1 cent = $0.01 = 10,000 micro-USD
+
+
+@dataclass(frozen=True)
+class CostBreakdown:
+    """Cost of a single LLM call.
+
+    `micro_usd` (millionths of a dollar) is the PRECISE source of truth and is
+    stamped into the ledger entry's metadata. `cents` is a coarse, conservative
+    view for the integer-cents ledger column: any non-zero cost rounds UP to at
+    least 1 cent, so per-call cents can overstate sub-cent calls — read
+    `cost_micro_usd` from metadata for accurate aggregate COGS.
+    """
+
+    cents: int
+    micro_usd: int
+    basis: str  # "actual_tokens" | "estimated_chars"
+    prompt_tokens: int
+    output_tokens: int
+    model: str
+
+    def as_metadata(self) -> dict:
+        return {
+            "cost_basis": self.basis,
+            "cost_micro_usd": self.micro_usd,
+            "prompt_tokens": self.prompt_tokens,
+            "output_tokens": self.output_tokens,
+            "model": self.model,
+        }
+
+
+def _micro_usd_from_tokens(prompt_tokens: int, output_tokens: int, model: str) -> int:
+    in_rate, out_rate = _MODEL_TOKEN_PRICING_USD_PER_M.get(model, _DEFAULT_TOKEN_PRICING_USD_PER_M)
+    usd = (prompt_tokens * in_rate + output_tokens * out_rate) / 1_000_000
+    return int(round(usd * 1_000_000))
+
+
+def _micro_usd_from_chars(prompt_chars: int, output_chars: int) -> int:
+    # Legacy char-based proxy used only when the API reports no token usage.
+    usd = (prompt_chars * 0.075 + output_chars * 0.30) / 1_000_000
+    return int(round(usd * 1_000_000))
+
+
+def _cents_from_micro_usd(micro_usd: int) -> int:
+    if micro_usd <= 0:
+        return 0
+    return max(1, math.ceil(micro_usd / _MICRO_USD_PER_CENT))
+
+
+def cost_breakdown_for_result(result: GeminiResult, *, prompt: str) -> CostBreakdown:
+    """Real token-based cost when the API reported usage; char estimate otherwise."""
+    if result.usage is not None and result.usage.total_tokens > 0:
+        micro = _micro_usd_from_tokens(
+            result.usage.prompt_tokens, result.usage.output_tokens, result.model
+        )
+        return CostBreakdown(
+            cents=_cents_from_micro_usd(micro),
+            micro_usd=micro,
+            basis="actual_tokens",
+            prompt_tokens=result.usage.prompt_tokens,
+            output_tokens=result.usage.output_tokens,
+            model=result.model,
+        )
+    micro = _micro_usd_from_chars(len(prompt), len(result.raw_text))
+    return CostBreakdown(
+        cents=_cents_from_micro_usd(micro),
+        micro_usd=micro,
+        basis="estimated_chars",
+        prompt_tokens=0,
+        output_tokens=0,
+        model=result.model,
+    )
 
 
 def estimate_cost_cents(
@@ -168,13 +288,5 @@ def estimate_cost_cents(
     output_chars: int,
     model: str = DEFAULT_MODEL,
 ) -> int:
-    """
-    Rough cost estimate in cents for budgeting.
-
-    Gemini Flash 2.0 (May 2026): ~$0.075 / 1M input chars, ~$0.30 / 1M output.
-    Round up to the nearest cent so the ledger is conservative.
-    """
-    input_cost = prompt_chars * 0.075 / 1_000_000  # USD
-    output_cost = output_chars * 0.30 / 1_000_000
-    total_cents = (input_cost + output_cost) * 100
-    return max(1, int(total_cents) + 1)
+    """Char-based cost estimate in cents (conservative fallback for budgeting)."""
+    return _cents_from_micro_usd(_micro_usd_from_chars(prompt_chars, output_chars))

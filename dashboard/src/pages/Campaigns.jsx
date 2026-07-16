@@ -18,6 +18,36 @@ export default function Campaigns() {
     personalize_enabled: false,
   });
   const [err, setErr] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [autofilling, setAutofilling] = useState(false);
+  const [autofillNote, setAutofillNote] = useState("");
+
+  async function autofillFromWebsite() {
+    if (!websiteUrl.trim()) return;
+    setAutofilling(true);
+    setAutofillNote("");
+    setErr("");
+    try {
+      const d = await api.post("/api/onboarding/analyze-website", { url: websiteUrl.trim() });
+      setForm((f) => ({
+        ...f,
+        customer_name: d.company_name || f.customer_name,
+        offer: d.offer || f.offer,
+        icp_description: d.icp_description || f.icp_description,
+        client_cure: d.client_cure || f.client_cure,
+        allowed_signal_types: (d.suggested_signal_types || []).join(", ") || f.allowed_signal_types,
+      }));
+      setAutofillNote(
+        d.source === "llm"
+          ? "Drafted from your website — review and edit, then create."
+          : "Couldn't read the site (or AI is off) — starter template loaded; edit the fields."
+      );
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setAutofilling(false);
+    }
+  }
 
   function load() {
     api.get("/api/campaigns").then(setCampaigns).catch((e) => setErr(e.message));
@@ -60,6 +90,19 @@ export default function Campaigns() {
 
       {showForm && (
         <form className="card form" onSubmit={create}>
+          <div className="autofill">
+            <label>⚡ Set up in seconds — paste your website
+              <input
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://yourcompany.com"
+              />
+            </label>
+            <button type="button" className="btn" disabled={autofilling} onClick={autofillFromWebsite}>
+              {autofilling ? "Reading your site…" : "Auto-fill from website"}
+            </button>
+            {autofillNote && <p className="notice">{autofillNote}</p>}
+          </div>
           <label>Customer name<input value={form.customer_name} onChange={upd("customer_name")} required /></label>
           <label>Offer<textarea rows="2" value={form.offer} onChange={upd("offer")} required /></label>
           <label>ICP description<textarea rows="2" value={form.icp_description} onChange={upd("icp_description")} required /></label>

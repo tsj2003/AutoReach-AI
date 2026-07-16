@@ -37,10 +37,11 @@ from typing import Optional
 from opentelemetry import trace
 
 from engine.llm.gemini import (
+    CostBreakdown,
     GeminiClient,
     GeminiError,
     GeminiUnavailable,
-    estimate_cost_cents,
+    cost_breakdown_for_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,11 @@ class ClassificationResult:
     referred_email: Optional[str] = None        # for referral
     referred_name: Optional[str] = None         # for referral
     openinference_trace_id: Optional[str] = None
+    # Honest cost detail (see gemini.CostBreakdown).
+    cost_basis: str = "none"
+    cost_micro_usd: int = 0
+    prompt_tokens: int = 0
+    output_tokens: int = 0
 
 
 _PROMPT_TEMPLATE = """\
@@ -123,7 +129,12 @@ Return STRICT JSON:
 """
 
 
-def _fallback(error: str, cost: int = 0, trace_id: Optional[str] = None) -> ClassificationResult:
+def _fallback(
+    error: str,
+    cost: int = 0,
+    trace_id: Optional[str] = None,
+    cb: Optional[CostBreakdown] = None,
+) -> ClassificationResult:
     return ClassificationResult(
         classification="objection",
         suggested_reply="",
@@ -131,6 +142,10 @@ def _fallback(error: str, cost: int = 0, trace_id: Optional[str] = None) -> Clas
         error=error,
         estimated_cost_cents=cost,
         openinference_trace_id=trace_id,
+        cost_basis=cb.basis if cb else "none",
+        cost_micro_usd=cb.micro_usd if cb else 0,
+        prompt_tokens=cb.prompt_tokens if cb else 0,
+        output_tokens=cb.output_tokens if cb else 0,
     )
 
 
@@ -168,10 +183,14 @@ def _classify_and_draft_impl(
         logger.warning("Gemini error during classification: %s", exc)
         return _fallback(str(exc), trace_id=trace_id)
 
-    cost = estimate_cost_cents(prompt_chars=len(prompt), output_chars=len(result.raw_text))
+    cb = cost_breakdown_for_result(result, prompt=prompt)
+    cost = cb.cents
     classification = str(result.data.get("classification") or "").strip().lower()
     if classification not in VALID_CLASSIFICATIONS:
-        return _fallback(f"invalid classification '{classification}' from gemini", cost, trace_id=trace_id)
+        return _fallback(
+            f"invalid classification '{classification}' from gemini",
+            cost, trace_id=trace_id, cb=cb,
+        )
 
     suggested = str(result.data.get("suggested_reply") or "").strip()
     if classification in ("auto", "out_of_office"):
@@ -199,6 +218,10 @@ def _classify_and_draft_impl(
         referred_email=referred_email if classification == "referral" else None,
         referred_name=referred_name if classification == "referral" else None,
         openinference_trace_id=trace_id,
+        cost_basis=cb.basis,
+        cost_micro_usd=cb.micro_usd,
+        prompt_tokens=cb.prompt_tokens,
+        output_tokens=cb.output_tokens,
     )
 
 
