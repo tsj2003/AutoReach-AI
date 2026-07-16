@@ -7,8 +7,11 @@ and binds Jinja2 templates. Single-file glue; logic lives in `cockpit/routes/`.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger("cockpit.app")
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -31,6 +34,21 @@ from engine.services import CsvIngestService, OperationsService, PnLService
 PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+
+
+def _console_enabled_from_env(db_url: str) -> bool:
+    """Whether the unauthenticated legacy Jinja console should be mounted.
+
+    Secure by default: the console is OFF unless AUTOREACH_ENABLE_CONSOLE is
+    explicitly truthy, with ONE exception — a local sqlite database is treated
+    as a developer machine where the console is a convenience, so it defaults
+    ON there. Any real (non-sqlite) database defaults the console OFF even if
+    the flag is forgotten; production additionally sets the flag to 0 explicitly.
+    """
+    raw = os.getenv("AUTOREACH_ENABLE_CONSOLE")
+    if raw is not None and raw.strip() != "":
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    return db_url.strip().lower().startswith("sqlite")
 
 
 def _format_cents(cents: int | None) -> str:
@@ -149,6 +167,24 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     """
     db_url = db_url or os.getenv("DATABASE_URL") or os.getenv("AUTOREACH_DB", "sqlite:///autoreach_engine.db")
 
+    # Surface misconfigured credential encryption LOUDLY, but do not crash the
+    # whole web service — that would take down auth, dashboard, and health
+    # checks (a crash-loop), which is worse than the mailbox feature failing.
+    # Credential writes fail closed at the point of use instead (see
+    # engine.security.secrets.encrypt_*), so plaintext secrets are never stored.
+    from engine.auth.jwt_handler import is_production_like
+    from engine.security.secrets import assert_encryption_ready
+
+    try:
+        assert_encryption_ready(production=is_production_like())
+    except RuntimeError as exc:
+        logger.critical(
+            "Credential encryption is not ready: %s — mailbox credential storage "
+            "will fail closed until AUTOREACH_CREDENTIAL_ENCRYPTION_KEY is set to a "
+            "valid Fernet key.",
+            exc,
+        )
+
     store, events, ledger = open_storage(db_url)
     ops = OperationsService(store=store, events=events)
     pnl = PnLService(store=store, ledger=ledger)
@@ -183,6 +219,8 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
         ledger=ledger,
         adapters=AdapterRegistry([email_adapter]),
         agent_runners={OutboundAgentV1.runner_kind: runner},
+        # Multi-tenant web app: refuse accidental unscoped all-tenant sweeps.
+        require_tenant_scope=True,
     )
 
     # Reply detector — only wired when we have real Gmail credentials AND a
@@ -248,14 +286,14 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     from cockpit.api.orphaned import router as orphaned_api_router
     from cockpit.api.outbox import router as outbox_api_router
     from cockpit.api.operations import router as operations_api_router
+    from cockpit.api.onboarding import router as onboarding_api_router
 
     # The legacy Jinja operator console has NO authentication and is not
-    # tenant-scoped, so it must never be exposed publicly. It is enabled by
-    # default for local development and disabled in production via
-    # AUTOREACH_ENABLE_CONSOLE=0 (see render.yaml).
-    console_enabled = os.getenv("AUTOREACH_ENABLE_CONSOLE", "1").strip().lower() in (
-        "1", "true", "yes", "on",
-    )
+    # tenant-scoped, so it must never be exposed publicly. Secure by default:
+    # OFF for any real (non-sqlite) database, ON only for local sqlite dev,
+    # unless AUTOREACH_ENABLE_CONSOLE is set explicitly. See
+    # _console_enabled_from_env; production also sets the flag to 0.
+    console_enabled = _console_enabled_from_env(db_url)
     legacy_oauth_enabled = os.getenv(
         "AUTOREACH_ENABLE_LEGACY_OAUTH",
         "1" if console_enabled else "0",
@@ -306,6 +344,7 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     app.include_router(orphaned_api_router)
     app.include_router(outbox_api_router)
     app.include_router(operations_api_router)
+    app.include_router(onboarding_api_router)
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):

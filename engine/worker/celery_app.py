@@ -118,6 +118,8 @@ def _build_runtime():
         store=store, events=events, ledger=ledger,
         adapters=AdapterRegistry([adapter]),
         agent_runners={OutboundAgentV1.runner_kind: OutboundAgentV1()},
+        # Multi-tenant worker: unscoped sweeps must be explicit (allow_all_tenants).
+        require_tenant_scope=True,
     )
     return runtime, store, events, ledger
 
@@ -205,7 +207,8 @@ def intent_ingest_campaign(
 def tick_all_active():
     """Beat task: tick all active engagements (drains due jobs across tenants)."""
     runtime, store, *_ = _build_runtime()
-    result = runtime.run_once(max_iters=10)
+    # The one legitimate system-wide sweep — declared explicitly.
+    result = runtime.run_once(max_iters=10, allow_all_tenants=True)
     return result
 
 

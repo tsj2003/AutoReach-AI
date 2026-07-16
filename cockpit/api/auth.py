@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
 from cockpit.api.deps import get_current_user, get_store
+from cockpit.api.ratelimit import rate_limit
 from engine.auth import (
     CurrentUser,
     Tenant,
@@ -156,7 +157,11 @@ def _make_tokens(user: User, plan: str) -> TokenResponse:
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 
-@router.post("/signup", response_model=TokenResponse)
+@router.post(
+    "/signup",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit("auth-signup", limit=15, window_seconds=3600))],
+)
 def signup(body: SignupRequest, store=Depends(get_store)):
     email = body.email.lower().strip()
 
@@ -189,7 +194,11 @@ def signup(body: SignupRequest, store=Depends(get_store)):
     return _make_tokens(user, tenant.plan)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit("auth-login", limit=25, window_seconds=300))],
+)
 def login(body: LoginRequest, store=Depends(get_store)):
     email = body.email.lower().strip()
     user = store.get_user_by_email(email)
@@ -225,7 +234,11 @@ def social_config():
     )
 
 
-@router.post("/google", response_model=TokenResponse)
+@router.post(
+    "/google",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit("auth-google", limit=25, window_seconds=300))],
+)
 def google_login(body: GoogleLoginRequest, store=Depends(get_store)):
     client_id = _google_client_id()
     if not client_id:
@@ -325,7 +338,11 @@ def me(
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit("auth-refresh", limit=120, window_seconds=300))],
+)
 def refresh(body: RefreshRequest, store=Depends(get_store)):
     try:
         payload = decode_jwt(body.refresh_token, expected_type="refresh")

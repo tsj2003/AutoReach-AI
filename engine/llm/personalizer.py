@@ -41,7 +41,12 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
-from engine.llm.gemini import GeminiClient, GeminiError, GeminiUnavailable, estimate_cost_cents
+from engine.llm.gemini import (
+    GeminiClient,
+    GeminiError,
+    GeminiUnavailable,
+    cost_breakdown_for_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +90,12 @@ class PersonalizationResult:
     fallback_used: bool
     error: Optional[str]
     estimated_cost_cents: int
+    # Honest cost detail (see gemini.CostBreakdown). Defaults cover the fallback
+    # paths where no billable LLM call was made.
+    cost_basis: str = "none"
+    cost_micro_usd: int = 0
+    prompt_tokens: int = 0
+    output_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -99,6 +110,10 @@ class _AgentPersonalizationResult:
     error: Optional[str]
     estimated_cost_cents: int
     used_fields: list = field(default_factory=list)
+    cost_basis: str = "none"
+    cost_micro_usd: int = 0
+    prompt_tokens: int = 0
+    output_tokens: int = 0
 
 
 _PROMPT = """\
@@ -181,6 +196,7 @@ def personalize(
             fallback_used=True, error=str(exc), estimated_cost_cents=0,
         )
 
+    cb = cost_breakdown_for_result(result, prompt=prompt)
     subject_out = _cap_subject(str(result.data.get("subject") or "").strip())
     body_out = str(result.data.get("body") or "").strip()
 
@@ -189,9 +205,9 @@ def personalize(
             subject=subject_template, body=body_template,
             fallback_used=True,
             error="empty subject or body from gemini",
-            estimated_cost_cents=estimate_cost_cents(
-                prompt_chars=len(prompt), output_chars=len(result.raw_text),
-            ),
+            estimated_cost_cents=cb.cents,
+            cost_basis=cb.basis, cost_micro_usd=cb.micro_usd,
+            prompt_tokens=cb.prompt_tokens, output_tokens=cb.output_tokens,
         )
 
     return PersonalizationResult(
@@ -199,9 +215,9 @@ def personalize(
         body=body_out,
         fallback_used=False,
         error=None,
-        estimated_cost_cents=estimate_cost_cents(
-            prompt_chars=len(prompt), output_chars=len(result.raw_text),
-        ),
+        estimated_cost_cents=cb.cents,
+        cost_basis=cb.basis, cost_micro_usd=cb.micro_usd,
+        prompt_tokens=cb.prompt_tokens, output_tokens=cb.output_tokens,
     )
 
 
@@ -295,6 +311,10 @@ def personalize_outbound(
             error=inner.error,
             estimated_cost_cents=inner.estimated_cost_cents,
             used_fields=used,
+            cost_basis=inner.cost_basis,
+            cost_micro_usd=inner.cost_micro_usd,
+            prompt_tokens=inner.prompt_tokens,
+            output_tokens=inner.output_tokens,
         )
 
     return _AgentPersonalizationResult(
@@ -304,4 +324,8 @@ def personalize_outbound(
         error=None,
         estimated_cost_cents=inner.estimated_cost_cents,
         used_fields=used,
+        cost_basis=inner.cost_basis,
+        cost_micro_usd=inner.cost_micro_usd,
+        prompt_tokens=inner.prompt_tokens,
+        output_tokens=inner.output_tokens,
     )

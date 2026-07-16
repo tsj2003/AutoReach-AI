@@ -1,15 +1,19 @@
 """HITL outbox approval API.
 
-This v1 router is intentionally header-scoped so worker-generated outbox rows
-can be reviewed without depending on the JWT cockpit session model.
+These are human-triggered approval actions (list pending / approve / reject) and
+approving a job dispatches a real email-send Celery task. The tenant is therefore
+resolved from the authenticated JWT — never from a client-supplied header — so a
+caller cannot approve or dispatch sends on behalf of another tenant.
 """
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from engine.auth.jwt_bearer import get_current_user_dep
+from engine.auth.models import CurrentUser
 from engine.tasks import dispatch_agent_task
 
 PENDING_APPROVAL = "PENDING_APPROVAL"
@@ -40,11 +44,9 @@ db_session: Any = None
 router = APIRouter(prefix="/api/v1/outbox", tags=["outbox"])
 
 
-def require_tenant_id(x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID")) -> str:
-    tenant_id = (x_tenant_id or "").strip()
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID header is required")
-    return tenant_id
+async def require_tenant_id(user: CurrentUser = Depends(get_current_user_dep)) -> str:
+    """Resolve tenant from the signed JWT — never from a client-supplied header."""
+    return user.tenant_id
 
 
 def _session() -> Any:

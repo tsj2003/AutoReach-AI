@@ -54,6 +54,8 @@ from typing import Iterable, Optional
 from engine.core.protocols import AgentContext, CostLedger
 from engine.core.types import Agent, CostEntry, Job, JobKind
 from engine.llm import GeminiClient, personalize_outbound
+from engine.services.ai_email_critic import build_ai_critic
+from engine.services.deliverability_guardian import DeliverabilityGuardian
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +131,8 @@ class OutboundAgentV1:
                 sent_history[ev.prospect_id] = (count + 1, new_last)
 
         now = datetime.now(timezone.utc)
+        # LLM critic activates only when OPENAI_API_KEY is set (else deterministic-only).
+        guardian = DeliverabilityGuardian(llm_critic=build_ai_critic())
         jobs: list[Job] = []
         scheduled_count = 0
 
@@ -225,9 +229,33 @@ class OutboundAgentV1:
                             job_id=_deterministic_job_id(engagement.id, prospect.id, "email.send", step_number),
                             category="llm",
                             amount_cents=pres.estimated_cost_cents,
-                            metadata={"purpose": "outbound_personalize", "step": step_number},
+                            metadata={
+                                "purpose": "outbound_personalize",
+                                "step": step_number,
+                                "cost_basis": pres.cost_basis,
+                                "cost_micro_usd": pres.cost_micro_usd,
+                                "prompt_tokens": pres.prompt_tokens,
+                                "output_tokens": pres.output_tokens,
+                            },
                         )
                     )
+
+            # Deliverability Guardian: score the actual draft for spam +
+            # AI-fingerprint risk before it can be sent. A high-risk draft ALWAYS
+            # requires human approval, even past the trust-ramp — the guard that
+            # stops AI copy from silently burning the domain.
+            _evidence = []
+            _research = prospect.research if isinstance(prospect.research, dict) else {}
+            _stack = _research.get("signal_stack") if isinstance(_research, dict) else None
+            if isinstance(_stack, dict):
+                _evidence = [e.get("summary", "") for e in _stack.get("evidence", []) if isinstance(e, dict)]
+            risk = guardian.score(
+                subject=payload.get("subject") or subject_template,
+                body=payload.get("body_text") or body_template,
+                grounded_evidence=_evidence or None,
+            )
+            payload["deliverability_risk"] = risk.as_dict()
+            job_requires_approval = requires_approval or not risk.is_send_safe
 
             jobs.append(
                 Job(
@@ -237,7 +265,7 @@ class OutboundAgentV1:
                     kind=JobKind.EMAIL_SEND,
                     payload=payload,
                     prospect_id=prospect.id,
-                    requires_approval=requires_approval,
+                    requires_approval=job_requires_approval,
                     scheduled_for=scheduled,
                 )
             )

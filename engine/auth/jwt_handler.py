@@ -23,6 +23,19 @@ _ALGORITHM = "HS256"
 _ACCESS_EXPIRE_HOURS = 24
 _REFRESH_EXPIRE_DAYS = 30
 
+# Repo-public sentinels that must never be accepted as a real signing secret.
+# The deploy templates ship "REPLACE_WITH_GENERATED_SECRET"; if an operator
+# forgets to override it, the signing key is public in git and any tenant's
+# token could be forged. Treat these as "unset" so production fails closed.
+_PLACEHOLDER_MARKERS = ("REPLACE_WITH", "CHANGE_ME", "YOUR_SECRET", "EXAMPLE")
+
+
+def _is_placeholder_secret(value: str) -> bool:
+    if not value:
+        return True
+    upper = value.upper()
+    return any(marker in upper for marker in _PLACEHOLDER_MARKERS)
+
 
 class AuthError(Exception):
     """Base auth error."""
@@ -39,23 +52,31 @@ class UnauthorizedError(AuthError):
 def _secret() -> str:
     s = os.getenv("AUTOREACH_JWT_SECRET", "").strip()
     production_like = _production_like()
-    if production_like and (not s or s == _DEV_SECRET):
-        raise AuthError("AUTOREACH_JWT_SECRET is required in production")
-    if not s:
+    if production_like and _is_placeholder_secret(s):
+        raise AuthError(
+            "AUTOREACH_JWT_SECRET is missing or still set to a placeholder. "
+            "Set a strong, unique secret before any production deployment."
+        )
+    if _is_placeholder_secret(s):
         logger.warning(
-            "AUTOREACH_JWT_SECRET not set — using insecure default. "
-            "Set this env var before any production deployment."
+            "AUTOREACH_JWT_SECRET is unset or a placeholder — using insecure dev "
+            "default. Set this env var before any production deployment."
         )
         return _DEV_SECRET
     return s
 
 
-def _production_like() -> bool:
+def is_production_like() -> bool:
+    """Heuristic: console disabled + a non-sqlite DATABASE_URL looks like prod."""
     console_disabled = os.getenv("AUTOREACH_ENABLE_CONSOLE", "").strip().lower() in {
         "0", "false", "no", "off",
     }
     database_url = os.getenv("DATABASE_URL", "").strip().lower()
     return console_disabled and bool(database_url) and not database_url.startswith("sqlite:")
+
+
+# Back-compat alias.
+_production_like = is_production_like
 
 
 def sign_jwt(

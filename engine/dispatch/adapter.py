@@ -52,7 +52,10 @@ class SmartRoutedEmailAdapter:
             provider=self._provider,
             store=self._store,
         )
-        mailbox = await router.get_next_available_mailbox(tenant_id=tenant_id)
+        recipient_email = job.payload.get("to") if isinstance(job.payload, dict) else None
+        mailbox = await router.get_next_available_mailbox(
+            tenant_id=tenant_id, recipient_email=recipient_email
+        )
         if mailbox is None:
             return AdapterResultData.fail("no healthy mailbox available for tenant", retryable=True)
 

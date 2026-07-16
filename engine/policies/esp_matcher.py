@@ -17,6 +17,17 @@ PROVIDER_PATTERNS = {
     "zoho": ["zoho.com", "zoho.in", "zohomail.com"],
 }
 
+# Mailbox rows tag themselves gmail|outlook|smtp; detection speaks
+# google|microsoft|zoho|other. Normalize the mailbox side to the same ESP
+# family so the two compare cleanly (previously "gmail" != "google" meant ESP
+# matching never fired against real mailboxes).
+_PROVIDER_ALIASES = {
+    "gmail": "google", "googlemail": "google", "google": "google",
+    "outlook": "microsoft", "hotmail": "microsoft", "office365": "microsoft",
+    "o365": "microsoft", "microsoft": "microsoft",
+    "zoho": "zoho",
+}
+
 _CACHE_TTL_SECONDS = 86_400
 
 
@@ -54,15 +65,22 @@ class EspMatcher:
                 return provider
         return "other"
 
+    @staticmethod
+    def normalize_provider(value: Optional[str]) -> str:
+        """Map a mailbox provider tag (gmail|outlook|smtp|…) to an ESP family."""
+        if not value:
+            return "other"
+        return _PROVIDER_ALIASES.get(value.strip().lower(), "other")
+
     def select_mailbox(self, prospect_email: str, mailboxes: list) -> Optional[object]:
         """
         Pick the best mailbox for a prospect. `mailboxes` is a list of objects
-        with a `.provider` attribute. Prefers same-provider, falls back to first.
+        with a `.provider` attribute. Prefers same-ESP-family, falls back to first.
         """
         if not mailboxes:
             return None
         target = self.detect_provider(prospect_email)
         for mb in mailboxes:
-            if getattr(mb, "provider", None) == target:
+            if self.normalize_provider(getattr(mb, "provider", None)) == target:
                 return mb
         return mailboxes[0]

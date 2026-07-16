@@ -52,6 +52,12 @@ class MailboxHealthMonitor:
         self._memory: dict[str, dict[str, int]] = {}
 
     def recommended_cap(self, warmup_day: int) -> int:
+        # Defensive: a legacy/partial mailbox row may carry a null/non-int
+        # warmup_day; never let that crash the health check that gates dispatch.
+        try:
+            warmup_day = int(warmup_day)
+        except (TypeError, ValueError):
+            warmup_day = 0
         if warmup_day < 0:
             warmup_day = 0
         if warmup_day < len(WARMUP_RAMP):
@@ -71,7 +77,17 @@ class MailboxHealthMonitor:
         self._memory_row(mailbox_id)["spam_complaints"] += 1
 
     async def get_health(self, mailbox_id: str) -> HealthStatus:
-        """Return async memory-backed health state for a single mailbox."""
+        """Live mailbox health used by the dispatch router.
+
+        When a store + event log are wired (the production dispatch path), this
+        returns the REAL events-based health over a rolling 24h window: durable,
+        per-mailbox, and consistent across workers and process restarts. It falls
+        back to in-process memory counters only when no event log is available
+        (isolated unit tests) — never silently reporting HEALTHY because a fresh
+        worker hasn't seen any sends yet.
+        """
+        if self._store is not None and self._events is not None:
+            return self.check_health(mailbox_id)
         row = self._memory_row(mailbox_id)
         return self._build_status(
             mailbox_id=mailbox_id,

@@ -94,3 +94,5 @@ Thumbs.db
 # ─────────────────────────────────────────────────────────────
 pg_data/
 redis_data/
+token_gmail.json
+token*.json

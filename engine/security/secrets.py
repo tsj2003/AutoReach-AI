@@ -33,11 +33,55 @@ def credential_encryption_configured() -> bool:
         return False
 
 
+def _production_context() -> bool:
+    try:
+        from engine.auth.jwt_handler import is_production_like
+
+        return bool(is_production_like())
+    except Exception:
+        return False
+
+
+def assert_encryption_ready(*, production: bool) -> None:
+    """Fail closed at boot if credential encryption is misconfigured.
+
+    - In production an unset key means mailbox OAuth secrets would be written in
+      plaintext (``encrypt_*`` silently passes the value through when no key is
+      configured). Refuse to boot rather than leak refresh tokens at rest.
+    - A set-but-invalid key (e.g. the ``REPLACE_WITH_GENERATED_FERNET_KEY``
+      deploy placeholder) would otherwise crash on the first write mid-flow.
+      Surface it at startup, everywhere, so it can't reach a live send path.
+    """
+    key = os.getenv(KEY_ENV, "").strip()
+    if not key:
+        if production:
+            raise RuntimeError(
+                f"{KEY_ENV} is required in production so mailbox OAuth secrets are "
+                "encrypted at rest. Generate one with Fernet.generate_key()."
+            )
+        return
+    try:
+        from cryptography.fernet import Fernet  # type: ignore
+
+        Fernet(key.encode("utf-8"))
+    except Exception as exc:  # invalid length / non-base64 / placeholder
+        raise RuntimeError(
+            f"{KEY_ENV} is set but is not a valid Fernet key. Generate one with "
+            "Fernet.generate_key(). Refusing to start to avoid plaintext or "
+            "crash-on-write behaviour."
+        ) from exc
+
+
 def encrypt_text(value: str | None) -> str | None:
     if value is None or value == "" or value.startswith(SECRET_PREFIX):
         return value
-    fernet = _fernet()
+    fernet = _fernet()  # raises if a key is set but invalid
     if fernet is None:
+        if _production_context():
+            raise RuntimeError(
+                f"{KEY_ENV} must be configured to store credentials in production; "
+                "refusing to write plaintext secrets."
+            )
         return value
     token = fernet.encrypt(value.encode("utf-8")).decode("utf-8")
     return SECRET_PREFIX + token
@@ -56,8 +100,13 @@ def decrypt_text(value: str | None) -> str | None:
 def encrypt_json_blob(value: dict[str, Any] | None) -> dict[str, Any] | None:
     if value is None or value.get(JSON_MARKER):
         return value
-    fernet = _fernet()
+    fernet = _fernet()  # raises if a key is set but invalid
     if fernet is None:
+        if _production_context():
+            raise RuntimeError(
+                f"{KEY_ENV} must be configured to store credentials in production; "
+                "refusing to write plaintext secrets."
+            )
         return dict(value)
     raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return {

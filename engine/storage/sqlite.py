@@ -665,6 +665,22 @@ class SqliteStore:
         with self._holder.conn() as c:
             c.execute(mailboxes_table.update().where(mailboxes_table.c.id == mailbox_id).values(**vals))
 
+    def bump_mailbox_send_count(self, mailbox_id: str, *, amount: int = 1) -> None:
+        """Atomically increment today's send counter — feeds the daily-cap gate.
+
+        SQL-level increment (not read-modify-write) so concurrent workers can't
+        clobber each other's counts and over-send past the mailbox's daily cap.
+        """
+        with self._holder.conn() as c:
+            c.execute(
+                mailboxes_table.update()
+                .where(mailboxes_table.c.id == mailbox_id)
+                .values(
+                    emails_sent_today=mailboxes_table.c.emails_sent_today + amount,
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+
     # ── Orphaned replies (M7) ─────────────────────────────────────────────
 
     def save_orphaned_reply(self, *, id: str, tenant_id: Optional[str], from_email: str,

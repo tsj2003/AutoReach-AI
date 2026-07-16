@@ -47,7 +47,7 @@ export default function Signup() {
           <img src="/app/brand/attainlly-logo.png" alt="Attainlly" />
         </Link>
         <h1 className="auth-title">Create your account</h1>
-        <p className="auth-sub">Start your 7-day free trial</p>
+        <p className="auth-sub">Deliverability-safe outbound. Every send protected, every draft you approve.</p>
 
         {err && <div className="auth-error">{err}</div>}
 
@@ -80,8 +80,9 @@ export default function Signup() {
           </label>
 
           <button className="auth-btn" disabled={busy || pwTooShort}>
-            {busy ? "Creating…" : "Create account"}
+            {busy ? "Creating…" : "Start 7-day Pro trial"}
           </button>
+          <p className="auth-trust">No credit card required · Cancel anytime · Your data stays tenant-isolated</p>
         </form>
 
         <SocialAuth onError={setErr} />

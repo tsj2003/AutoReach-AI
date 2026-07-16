@@ -68,7 +68,10 @@ async def dispatch_email_send_task(
         store=store,
     )
 
-    mailbox = await router.get_next_available_mailbox(tenant_id=context.tenant_id)
+    mailbox = await router.get_next_available_mailbox(
+        tenant_id=context.tenant_id,
+        recipient_email=payload.get("to"),
+    )
     if mailbox is None:
         return ExecutionResult(
             success=False,

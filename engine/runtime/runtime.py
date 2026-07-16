@@ -120,6 +120,7 @@ class EngineRuntime:
         ledger: CostLedger,
         adapters: AdapterRegistry,
         agent_runners: dict[str, AgentRunner],
+        require_tenant_scope: bool = False,
     ) -> None:
         self._store = store
         self._events = events
@@ -127,6 +128,11 @@ class EngineRuntime:
         self._adapters = adapters
         # Map of runner_kind -> AgentRunner instance
         self._agent_runners = agent_runners
+        # When True (multi-tenant SaaS contexts: cockpit web app + worker), an
+        # unscoped plan/execute is refused unless explicitly opted into with
+        # allow_all_tenants=True. Left False for the single-operator CLI and
+        # tests, where processing the whole (single-tenant) store is intended.
+        self._require_tenant_scope = require_tenant_scope
 
     # ───────────────────── Public API ─────────────────────
 
@@ -162,19 +168,46 @@ class EngineRuntime:
             new_count += 1
         return new_count
 
+    def _ensure_scope(
+        self,
+        *,
+        tenant_id: Optional[str],
+        engagement_id: Optional[str],
+        allow_all_tenants: bool,
+    ) -> None:
+        """Refuse an accidental cross-tenant sweep in a tenant-scoped runtime."""
+        if (
+            self._require_tenant_scope
+            and tenant_id is None
+            and engagement_id is None
+            and not allow_all_tenants
+        ):
+            raise ValueError(
+                "refusing unscoped all-tenant execution in a tenant-scoped runtime; "
+                "pass tenant_id/engagement_id, or allow_all_tenants=True for a "
+                "deliberate system-wide sweep (e.g. the beat scheduler)."
+            )
+
     def plan_all(
         self,
         *,
         tenant_id: Optional[str] = None,
         engagement_id: Optional[str] = None,
+        allow_all_tenants: bool = False,
     ) -> int:
         """
         Run plan() for active agents in the requested scope.
 
-        Passing `tenant_id` and/or `engagement_id` is the SaaS-safe path. The
-        unscoped default remains for the trusted single-operator cockpit and
-        older tests.
+        Passing `tenant_id` and/or `engagement_id` is the SaaS-safe path. An
+        unscoped call sweeps every tenant; in a tenant-scoped runtime that is
+        refused unless `allow_all_tenants=True` is passed explicitly (the beat
+        scheduler is the one legitimate system-wide caller).
         """
+        self._ensure_scope(
+            tenant_id=tenant_id,
+            engagement_id=engagement_id,
+            allow_all_tenants=allow_all_tenants,
+        )
         total = 0
         if engagement_id is not None:
             engagement = self._store.get_engagement(engagement_id, tenant_id=tenant_id)
@@ -195,8 +228,14 @@ class EngineRuntime:
         limit: int = 50,
         tenant_id: Optional[str] = None,
         engagement_id: Optional[str] = None,
+        allow_all_tenants: bool = False,
     ) -> int:
         """Pick due jobs and execute them. Returns count of jobs executed."""
+        self._ensure_scope(
+            tenant_id=tenant_id,
+            engagement_id=engagement_id,
+            allow_all_tenants=allow_all_tenants,
+        )
         executed = 0
         for job in list(
             self._store.list_due_jobs(
@@ -219,10 +258,19 @@ class EngineRuntime:
         *,
         tenant_id: Optional[str] = None,
         engagement_id: Optional[str] = None,
+        allow_all_tenants: bool = False,
     ) -> dict[str, int]:
         """One full cycle: plan + execute one batch."""
-        planned = self.plan_all(tenant_id=tenant_id, engagement_id=engagement_id)
-        executed = self.execute_due_jobs(tenant_id=tenant_id, engagement_id=engagement_id)
+        planned = self.plan_all(
+            tenant_id=tenant_id,
+            engagement_id=engagement_id,
+            allow_all_tenants=allow_all_tenants,
+        )
+        executed = self.execute_due_jobs(
+            tenant_id=tenant_id,
+            engagement_id=engagement_id,
+            allow_all_tenants=allow_all_tenants,
+        )
         return {"planned": planned, "executed": executed}
 
     def run_once(
@@ -231,6 +279,7 @@ class EngineRuntime:
         max_iters: int = 50,
         tenant_id: Optional[str] = None,
         engagement_id: Optional[str] = None,
+        allow_all_tenants: bool = False,
     ) -> dict[str, int]:
         """
         Drain: keep ticking until no jobs are executed in a tick.
@@ -238,7 +287,11 @@ class EngineRuntime:
         """
         totals = {"planned": 0, "executed": 0, "iterations": 0}
         for _ in range(max_iters):
-            r = self.tick(tenant_id=tenant_id, engagement_id=engagement_id)
+            r = self.tick(
+                tenant_id=tenant_id,
+                engagement_id=engagement_id,
+                allow_all_tenants=allow_all_tenants,
+            )
             totals["planned"] += r["planned"]
             totals["executed"] += r["executed"]
             totals["iterations"] += 1

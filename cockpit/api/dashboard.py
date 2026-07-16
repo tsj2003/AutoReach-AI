@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from engine.auth.jwt_bearer import get_current_user_dep
+from engine.auth.models import CurrentUser
 from engine.billing.ledger import CostEntry, LedgerService, PnLReport
 
 db_session: Any = None
@@ -14,11 +16,14 @@ db_session: Any = None
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
 
-def require_tenant_id(x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID")) -> str:
-    tenant_id = (x_tenant_id or "").strip()
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID header is required")
-    return tenant_id
+async def require_tenant_id(user: CurrentUser = Depends(get_current_user_dep)) -> str:
+    """Resolve tenant from the signed JWT — never from a client-supplied header.
+
+    Financial data must be bound to the authenticated identity. Trusting an
+    ``X-Tenant-ID`` header here previously let any caller read any tenant's P&L
+    by guessing a tenant/campaign id.
+    """
+    return user.tenant_id
 
 
 def _session(request: Request) -> Any:
