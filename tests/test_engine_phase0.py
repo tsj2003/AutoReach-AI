@@ -54,6 +54,7 @@ def test_public_surface_is_complete():
         "SqliteStore", "SqliteEventSink", "SqliteCostLedger", "open_storage",
         # Adapters
         "ConsoleEmailAdapter", "GmailEmailAdapter", "RealGmailSendAdapter",
+        "GmailMailer",
         "GmailTokenStore", "JsonFileTokenStore",
         "TokenInvalid", "TokenUnavailable",
         # Agent runners

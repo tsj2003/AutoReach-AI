@@ -939,30 +939,9 @@ class LinkedInProvider:
                         }
                     )
 
-        # In dry-run or empty live inbox, provide deterministic structured Voyager thread preview
-        if not threads:
-            threads = [
-                {
-                    "linkedinMessageBackendUrn": "urn:li:messagingThread:2-Y29udmVyc2F0aW9uX3ZveWFnZXJfMDE=",
-                    "participant_name": "Eileen O'Mara",
-                    "participant_headline": "Chief Revenue Officer at Stripe",
-                    "participant_public_id": "eileenomara",
-                    "profile_url": "https://www.linkedin.com/in/eileenomara",
-                    "snippet": "Thanks for connecting! We're evaluating signal-based outbound tools this quarter — happy to compare notes.",
-                    "classification": "interested",
-                    "received_at": datetime.now(timezone.utc).isoformat(),
-                },
-                {
-                    "linkedinMessageBackendUrn": "urn:li:messagingThread:2-Y29udmVyc2F0aW9uX3ZveWFnZXJfMDI=",
-                    "participant_name": "Cristina Cordova",
-                    "participant_headline": "Chief Operating Officer at Linear",
-                    "participant_public_id": "cristinacordova",
-                    "profile_url": "https://www.linkedin.com/in/cristinacordova",
-                    "snippet": "Saw your note about our hiring surge — can you send over a 2-minute overview?",
-                    "classification": "interested",
-                    "received_at": datetime.now(timezone.utc).isoformat(),
-                },
-            ]
+        # Honest empty: no cookie (dry-run) or a genuinely empty live inbox yields
+        # zero threads. We never fabricate "interested" replies — doing so would
+        # persist fake hot leads into ReplyStore / Unibox.
 
         persisted_reply_ids: List[str] = []
         if store is not None:
@@ -1153,61 +1132,9 @@ class LinkedInProvider:
                 )
             )
 
-        if not engagers:
-            # Structured preview engagers when in dry_run_no_cookie or offline mode
-            engagers = [
-                LinkedInPostEngager(
-                    public_id="jeannedewitt",
-                    member_urn="urn:li:fsd_profile:ACoAA_JEANNE_VERCEL",
-                    first_name="Jeanne",
-                    last_name="DeWitt Grosser",
-                    full_name="Jeanne DeWitt Grosser",
-                    headline="Chief Operating Officer at Vercel",
-                    title="Chief Operating Officer",
-                    company_name="Vercel",
-                    company_domain="vercel.com",
-                    linkedin_url="https://www.linkedin.com/in/jeannedewitt",
-                    engagement_type="COMMENT",
-                    reaction_type="COMMENT",
-                    comment_text="We've been seeing strong pipeline lift from combining first-party intent with social signals.",
-                    activity_urn=activity_urn,
-                    signal_type=signal_type,
-                ),
-                LinkedInPostEngager(
-                    public_id="kareemamin",
-                    member_urn="urn:li:fsd_profile:ACoAA_KAREEM_CLAY",
-                    first_name="Kareem",
-                    last_name="Amin",
-                    full_name="Kareem Amin",
-                    headline="Co-Founder & CEO at Clay",
-                    title="Co-Founder & CEO",
-                    company_name="Clay",
-                    company_domain="clay.com",
-                    linkedin_url="https://www.linkedin.com/in/kareemamin",
-                    engagement_type="LIKE",
-                    reaction_type="LIKE",
-                    comment_text="",
-                    activity_urn=activity_urn,
-                    signal_type=signal_type,
-                ),
-                LinkedInPostEngager(
-                    public_id="ccacioppo",
-                    member_urn="urn:li:fsd_profile:ACoAA_CHRISTINA_VANTA",
-                    first_name="Christina",
-                    last_name="Cacioppo",
-                    full_name="Christina Cacioppo",
-                    headline="Co-Founder & CEO at Vanta",
-                    title="Co-Founder & CEO",
-                    company_name="Vanta",
-                    company_domain="vanta.com",
-                    linkedin_url="https://www.linkedin.com/in/ccacioppo",
-                    engagement_type="LIKE",
-                    reaction_type="PRAISE",
-                    comment_text="",
-                    activity_urn=activity_urn,
-                    signal_type=signal_type,
-                ),
-            ]
+        # Honest empty: when the live scrape (or dry-run) yields no likers/commenters,
+        # we return zero engagers. We never fabricate famous-exec prospects — doing so
+        # would seed fake signal-stacked leads into the tenant's pipeline.
 
         created_prospect_ids: List[str] = []
         created_signal_ids: List[str] = []

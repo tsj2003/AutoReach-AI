@@ -100,3 +100,5 @@ token*.json
 
 # Azure onboarding sessions can contain deployment metadata and secret refs.
 .copilot-azure/
+# Local Azure CLI profile/session state (tokens, subscription profile) — never commit.
+.azure-cli-local/

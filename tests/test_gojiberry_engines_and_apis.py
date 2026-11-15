@@ -304,17 +304,33 @@ def test_gojiberry_full_api_flow(gb_client: TestClient):
     # 7. B2B Directory
     r_ind = gb_client.get("/api/directory/industries", headers=headers)
     assert r_ind.status_code == 200
+    # Honest contract: the directory is EMPTY until real discovery/reveal populates it.
+    # No hardcoded famous-exec rows are served as a live database.
     r_leads = gb_client.post("/api/directory/leads/search", headers=headers, json={"title": "VP"})
     assert r_leads.status_code == 200
-    assert r_leads.json()["total"] >= 1
-    lead_id = r_leads.json()["items"][0]["id"]
+    assert r_leads.json()["total"] == 0
+    assert r_leads.json()["items"] == []
+    # Unknown lead_id must 404 (no seed row to fall back to).
+    r_rev_missing = gb_client.post(
+        "/api/directory/leads/reveal",
+        headers=headers,
+        json={"lead_id": "lead_does_not_exist", "reveal_email": True},
+    )
+    assert r_rev_missing.status_code == 404
+    # Reveal a specific person by real name + domain (offline permutation path).
     r_rev = gb_client.post(
         "/api/directory/leads/reveal",
         headers=headers,
-        json={"lead_id": lead_id, "reveal_email": True, "reveal_phone": True},
+        json={
+            "first_name": "Sarah",
+            "last_name": "Chen",
+            "domain": "linear.app",
+            "reveal_email": True,
+            "extract_phone": False,
+        },
     )
     assert r_rev.status_code == 200
-    assert "@" in (r_rev.json()["lead"]["email"] or "")
+    assert "@linear.app" in (r_rev.json()["lead"]["email"] or "")
 
     # 8. CRM & 29-Tool MCP Catalog
     r_mcp = gb_client.get("/api/crm/mcp-catalog", headers=headers)

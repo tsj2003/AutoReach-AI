@@ -46,49 +46,6 @@ router = APIRouter(prefix="/api/visitors", tags=["visitors"])
 
 _VISITOR_CONFIG_KEY = "visitor_tracking:config"
 
-_SIMULATED_COMPANIES: List[Dict[str, Any]] = [
-    {
-        "company_name": "Stripe",
-        "domain": "stripe.com",
-        "ip_address": "198.27.128.42",
-        "industry": "FinTech & Payments Infrastructure",
-        "company_size": "5001-10000",
-        "location": "San Francisco, CA",
-        "page_path": "/pricing",
-        "page_title": "Enterprise Pricing — AutoReach AI",
-        "decision_makers": [
-            {"first_name": "Eileen", "last_name": "O'Mara", "title": "Chief Revenue Officer", "linkedin_url": "https://www.linkedin.com/in/eileenomara"},
-        ],
-    },
-    {
-        "company_name": "Ramp",
-        "domain": "ramp.com",
-        "ip_address": "198.51.100.42",
-        "industry": "FinTech & Corporate Cards",
-        "company_size": "501-1000",
-        "location": "New York, NY",
-        "page_path": "/pricing",
-        "page_title": "Enterprise Pricing — AutoReach AI",
-        "decision_makers": [
-            {"first_name": "Eric", "last_name": "Glyman", "title": "Co-Founder & CEO", "linkedin_url": "https://www.linkedin.com/in/eglyman"},
-            {"first_name": "Colin", "last_name": "Kennedy", "title": "Chief Business Officer", "linkedin_url": "https://www.linkedin.com/in/colinkennedy"},
-        ],
-    },
-    {
-        "company_name": "Linear",
-        "domain": "linear.app",
-        "ip_address": "104.16.100.22",
-        "industry": "B2B SaaS & Product Management",
-        "company_size": "51-200",
-        "location": "San Francisco, CA",
-        "page_path": "/demo",
-        "page_title": "Book a Demo — AutoReach AI",
-        "decision_makers": [
-            {"first_name": "Cristina", "last_name": "Cordova", "title": "Chief Operating Officer", "linkedin_url": "https://www.linkedin.com/in/cristinacordova"},
-        ],
-    },
-]
-
 
 class VisitorBeaconRequest(BaseModel):
     workspace_id: str = "default"
@@ -441,31 +398,21 @@ def ingest_visitor_beacon(
         except Exception:
             pass
 
-    if not decision_makers and domain and res.is_corporate:
-        for sim in _SIMULATED_COMPANIES:
-            if sim["domain"] == domain:
-                decision_makers = list(sim["decision_makers"])
-                industry = sim["industry"]
-                location = sim["location"]
-                break
-        if not decision_makers:
-            decision_makers = [
-                {
-                    "first_name": "Alex",
-                    "last_name": "Morgan",
-                    "title": "VP of Growth & Revenue",
-                    "linkedin_url": f"https://www.linkedin.com/company/{domain.split('.')[0]}",
-                }
-            ]
+    # No fabricated decision-makers. When the resolver identifies the company but
+    # not the people (e.g. Layer 4 RDAP without a live crawl), decision_makers stays
+    # empty — enable crawl_live to discover real leadership, or enrich later.
 
     cascaded_prospect_ids: List[str] = []
     if payload.cascade_prospects and res.is_corporate and domain:
         engagements = list(store.list_engagements())
         target_campaign = payload.campaign_id or (engagements[0].id if engagements else "default")
         for dm in decision_makers[:2]:
-            first = dm.get("first_name") or "Alex"
-            last = dm.get("last_name") or "Morgan"
+            first = (dm.get("first_name") or "").strip()
+            last = (dm.get("last_name") or "").strip()
             dm_email = dm.get("email") or res.person_email
+            if not first and not dm_email:
+                # No real identity for this decision-maker — don't invent one.
+                continue
             if not dm_email:
                 email_res = find_and_verify_email(
                     first_name=first,
@@ -645,23 +592,22 @@ def simulate_corporate_visitor(
     store: Any = Depends(get_store),
     user: Any = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Simulate a corporate or WFH stitched B2B visitor session and cascade decision-makers into Contacts."""
-    chosen = _SIMULATED_COMPANIES[0]
-    if payload.domain:
-        for sim in _SIMULATED_COMPANIES:
-            if sim["domain"] == payload.domain.strip().lower():
-                chosen = sim
-                break
-        else:
-            chosen = {
-                "company_name": payload.company_name or payload.domain.split(".")[0].title(),
-                "domain": payload.domain.strip().lower(),
-                "ip_address": payload.ip_address or "198.27.128.42",
-                "page_path": payload.page_path or "/pricing",
-                "page_title": "Pricing & Plans",
-            }
+    """Run a visitor-resolution test against a REAL domain/IP through the live 5-layer
+    pipeline. No fabricated companies or decision-makers — provide a domain (or IP,
+    or an identity token) and the resolver returns whatever it can actually verify.
+    Enable `crawl_live` to discover real leadership for the resolved company."""
+    has_identity = bool(payload.ar_vid or payload.ar_pid or payload.gb_cid or payload.fingerprint_hash or payload.email)
+    domain = (payload.domain or "").strip().lower()
+    ip = (payload.ip_address or payload.ip or payload.ip_override or "").strip()
+    if not domain and not ip and not has_identity:
+        from fastapi import HTTPException
 
-    eff_path = payload.page_path or chosen.get("page_path", "/pricing")
+        raise HTTPException(
+            status_code=400,
+            detail="Provide a domain, an IP address, or an identity token (ar_vid/email) to resolve a real visitor.",
+        )
+
+    eff_path = payload.page_path or "/pricing"
     eff_url = payload.page_url or f"https://app.autoreach.ai{eff_path}"
 
     beacon = VisitorBeaconRequest(
@@ -669,9 +615,9 @@ def simulate_corporate_visitor(
         ar_vid=payload.ar_vid,
         ar_pid=payload.ar_pid,
         gb_cid=payload.gb_cid,
-        ip_address=payload.ip_address or payload.ip or chosen["ip_address"],
-        domain_hint=payload.domain or (chosen["domain"] if not (payload.ar_vid or payload.ar_pid or payload.fingerprint_hash) else None),
-        company_hint=payload.company_name or (chosen["company_name"] if not (payload.ar_vid or payload.ar_pid or payload.fingerprint_hash) else None),
+        ip_address=ip or None,
+        domain_hint=domain or None,
+        company_hint=payload.company_name or None,
         email=payload.email,
         full_name=payload.full_name,
         fingerprint_hash=payload.fingerprint_hash or "",
@@ -681,8 +627,8 @@ def simulate_corporate_visitor(
         webgl_renderer=payload.webgl_renderer,
         page_path=eff_path,
         page_url=eff_url,
-        page_title=chosen.get("page_title", "Pricing & Plans"),
-        pages_visited=payload.pages_visited or ["/pricing", "/demo"],
+        page_title="Pricing & Plans",
+        pages_visited=payload.pages_visited or [eff_path],
         time_on_page_seconds=payload.time_on_page_seconds,
         scroll_depth_pct=payload.scroll_depth_pct,
         cta_clicks=payload.cta_clicks,

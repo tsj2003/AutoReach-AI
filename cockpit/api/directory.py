@@ -8,17 +8,18 @@ and the Direct-Dial & Corporate Switchboard Phone OSINT Extractor.
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from cockpit.api.deps import get_current_user, get_store
 from engine.core.types import Prospect
 from engine.services.apollo_spider_engine import (
-    SEED_B2B_DIRECTORY_RECORDS,
     ApolloSpiderEngine,
     DiscoveredPersonRecord,
     extract_osint_phones_for_domain,
@@ -45,170 +46,55 @@ DIRECTORY_INDUSTRIES: List[str] = [
     "Healthcare & BioTech",
 ]
 
-SEED_B2B_COMPANIES: List[Dict[str, Any]] = [
-    {
-        "id": "comp_stripe",
-        "name": "Stripe",
-        "domain": "stripe.com",
-        "industry": "FinTech & Payments Infrastructure",
-        "employee_count": 7500,
-        "employee_range": "5001-10000",
-        "revenue_range": "$1B+",
-        "location": "San Francisco, CA",
-        "funding_stage": "Late Stage / Pre-IPO",
-        "phone": "+18889262289",
-        "technologies": ["Stripe", "AWS", "Snowflake", "Salesforce", "Segment", "Datadog", "React"],
-        "signals": ["HIRING_SURGE", "ENTERPRISE_EXPANSION", "GLOBAL_PAYMENTS_LAUNCH"],
-        "is_hiring": True,
-        "is_hiring_surge": True,
-        "open_roles_count": 84,
-        "ats_provider": "Greenhouse",
-        "linkedin_url": "https://www.linkedin.com/company/stripe",
-        "description": "Financial infrastructure platform for internet businesses and enterprise commerce.",
-    },
-    {
-        "id": "comp_vercel",
-        "name": "Vercel",
-        "domain": "vercel.com",
-        "industry": "Cloud & Developer Infrastructure",
-        "employee_count": 620,
-        "employee_range": "501-1000",
-        "revenue_range": "$100M-$250M",
-        "location": "San Francisco, CA",
-        "funding_stage": "Series E ($250M)",
-        "phone": "+14158004120",
-        "technologies": ["Next.js", "React", "TypeScript", "Vercel", "Stripe", "Salesforce", "HubSpot", "Snowflake"],
-        "signals": ["HIRING_SURGE", "PRODUCT_LAUNCH", "AI_INITIATIVE"],
-        "is_hiring": True,
-        "is_hiring_surge": True,
-        "open_roles_count": 32,
-        "ats_provider": "Greenhouse",
-        "linkedin_url": "https://www.linkedin.com/company/vercel",
-        "description": "Frontend cloud platform enabling developers to build and deploy web experiences and AI apps.",
-    },
-    {
-        "id": "comp_linear",
-        "name": "Linear",
-        "domain": "linear.app",
-        "industry": "B2B SaaS & Product Management",
-        "employee_count": 95,
-        "employee_range": "51-200",
-        "revenue_range": "$25M-$50M",
-        "location": "San Francisco, CA",
-        "funding_stage": "Series B ($52M)",
-        "phone": "+14156920144",
-        "technologies": ["React", "TypeScript", "GraphQL", "Node.js", "GCP", "Segment", "Ashby"],
-        "signals": ["ENTERPRISE_TIER_LAUNCH", "HIRING_SALES"],
-        "is_hiring": True,
-        "is_hiring_surge": False,
-        "open_roles_count": 9,
-        "ats_provider": "Ashby",
-        "linkedin_url": "https://www.linkedin.com/company/linearapp",
-        "description": "Purpose-built tool for planning and building software products at high velocity.",
-    },
-    {
-        "id": "comp_clay",
-        "name": "Clay",
-        "domain": "clay.com",
-        "industry": "AI Go-To-Market & Data Automation",
-        "employee_count": 160,
-        "employee_range": "51-200",
-        "revenue_range": "$25M-$100M",
-        "location": "New York, NY",
-        "funding_stage": "Series B ($62M)",
-        "phone": "+12126589010",
-        "technologies": ["OpenAI", "Anthropic", "React", "TypeScript", "Segment", "HubSpot", "Intercom", "Ashby"],
-        "signals": ["SERIES_B_FUNDING", "HIRING_SURGE", "HYPERGROWTH"],
-        "is_hiring": True,
-        "is_hiring_surge": True,
-        "open_roles_count": 21,
-        "ats_provider": "Ashby",
-        "linkedin_url": "https://www.linkedin.com/company/grow-with-clay",
-        "description": "AI GTM development environment combining 75+ data enrichment workflows with autonomous research.",
-    },
-    {
-        "id": "comp_vanta",
-        "name": "Vanta",
-        "domain": "vanta.com",
-        "industry": "Cybersecurity & Trust Management",
-        "employee_count": 550,
-        "employee_range": "501-1000",
-        "revenue_range": "$100M-$250M",
-        "location": "San Francisco, CA",
-        "funding_stage": "Series C ($150M)",
-        "phone": "+14159685200",
-        "technologies": ["AWS", "React", "TypeScript", "GraphQL", "Salesforce", "Marketo", "Greenhouse"],
-        "signals": ["HIRING_SURGE", "NEW_EXEC_HIRE", "SOC2_AI_AUTOMATION"],
-        "is_hiring": True,
-        "is_hiring_surge": True,
-        "open_roles_count": 38,
-        "ats_provider": "Greenhouse",
-        "linkedin_url": "https://www.linkedin.com/company/vanta-security",
-        "description": "Automated security monitoring and trust management platform for SOC 2, ISO 27001, and HIPAA.",
-    },
-    {
-        "id": "comp_ramp",
-        "name": "Ramp",
-        "domain": "ramp.com",
-        "industry": "FinTech & Corporate Spend Management",
-        "employee_count": 950,
-        "employee_range": "501-1000",
-        "revenue_range": "$250M-$500M",
-        "location": "New York, NY",
-        "funding_stage": "Series D ($150M)",
-        "phone": "+16468464400",
-        "technologies": ["Next.js", "Python", "PostgreSQL", "Snowflake", "Salesforce", "HubSpot", "Ashby"],
-        "signals": ["FUNDING_ROUND", "HIRING_SURGE", "PROCUREMENT_LAUNCH"],
-        "is_hiring": True,
-        "is_hiring_surge": True,
-        "open_roles_count": 56,
-        "ats_provider": "Ashby",
-        "linkedin_url": "https://www.linkedin.com/company/ramp",
-        "description": "Corporate card, bill pay, procurement, and automated expense management platform.",
-    },
-    {
-        "id": "comp_supabase",
-        "name": "Supabase",
-        "domain": "supabase.com",
-        "industry": "Database & Developer Tools",
-        "employee_count": 120,
-        "employee_range": "51-200",
-        "revenue_range": "$25M-$50M",
-        "location": "San Francisco, CA",
-        "funding_stage": "Series B ($80M)",
-        "phone": "+14157993820",
-        "technologies": ["PostgreSQL", "TypeScript", "Next.js", "Tailwind CSS", "AWS", "Cloudflare", "PostHog"],
-        "signals": ["AI_VECTOR_LAUNCH", "DEVELOPER_GROWTH"],
-        "is_hiring": True,
-        "is_hiring_surge": False,
-        "open_roles_count": 8,
-        "ats_provider": "Ashby",
-        "linkedin_url": "https://www.linkedin.com/company/supabase",
-        "description": "Open-source Postgres development platform with pgvector AI embeddings, auth, and edge functions.",
-    },
-    {
-        "id": "comp_retool",
-        "name": "Retool",
-        "domain": "retool.com",
-        "industry": "Developer Tools & Internal Software",
-        "employee_count": 410,
-        "employee_range": "201-500",
-        "revenue_range": "$100M-$250M",
-        "location": "San Francisco, CA",
-        "funding_stage": "Series C ($45M)",
-        "phone": "+14156109822",
-        "technologies": ["React", "TypeScript", "Node.js", "PostgreSQL", "Salesforce", "Segment", "Greenhouse"],
-        "signals": ["HIRING_SALES", "ENTERPRISE_PUSH"],
-        "is_hiring": True,
-        "is_hiring_surge": True,
-        "open_roles_count": 19,
-        "ats_provider": "Greenhouse",
-        "linkedin_url": "https://www.linkedin.com/company/tryretool",
-        "description": "Fastest platform for building internal business software, workflows, and database GUIs.",
-    },
-]
+# The companies directory starts EMPTY. Rows appear only after a real crawl/reveal
+# (`/companies/reveal`, `/spider/run`) populates `directory_companies_cache`.
+# No hardcoded company roster is served as if it were a live database.
+SEED_B2B_COMPANIES: List[Dict[str, Any]] = []
 
-_SAVED_SEARCHES_MEM: Dict[str, List[Dict[str, Any]]] = {}
+
+def _load_directory_companies(store: Any) -> List[Dict[str, Any]]:
+    """Read companies actually discovered/indexed into `directory_companies_cache`."""
+    ApolloSpiderEngine(store=store)  # ensure tables exist
+    out: List[Dict[str, Any]] = []
+    try:
+        with store._holder.engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT domain, company_name, industry, employee_range, location, "
+                    "primary_phone, technologies_json, payload_json, updated_at "
+                    "FROM directory_companies_cache ORDER BY updated_at DESC"
+                )
+            ).mappings().all()
+    except Exception:
+        return out
+    for r in rows:
+        payload: Dict[str, Any] = {}
+        try:
+            payload = json.loads(r["payload_json"] or "{}")
+        except Exception:
+            payload = {}
+        try:
+            techs = json.loads(r["technologies_json"] or "[]")
+        except Exception:
+            techs = []
+        out.append(
+            {
+                "id": f"comp_{(r['domain'] or '').replace('.', '_')}",
+                "name": r["company_name"],
+                "domain": r["domain"],
+                "industry": r["industry"],
+                "employee_count": payload.get("employee_count"),
+                "employee_range": r["employee_range"],
+                "location": r["location"],
+                "phone": r["primary_phone"],
+                "technologies": techs,
+                "signals": payload.get("signals", []),
+                "is_hiring": any("HIRING" in str(s).upper() for s in payload.get("signals", [])),
+                "description": payload.get("description", ""),
+            }
+        )
+    return out
+
 
 
 class LeadSearchPayload(BaseModel):
@@ -321,51 +207,9 @@ def _execute_leads_search(
     if employee_range:
         results = [r for r in results if r.get("employee_range") == employee_range]
 
-    if live_discover and (company_domain or (q and "." in q and " " not in q.strip())) and not results:
-        target_dom = normalize_domain(company_domain or q or "")
-        if target_dom:
-            email_res = find_and_verify_email(
-                first_name="Alex",
-                last_name="Rivera",
-                domain=target_dom,
-                enable_smtp_probe=False,
-                discover_public=False,
-            )
-            phone_res = extract_osint_phones_for_domain(
-                target_dom,
-                crawl_web=False,
-                check_rdap=False,
-                check_sec_edgar=False,
-            )
-            comp_label = target_dom.split(".")[0].capitalize()
-            rec = DiscoveredPersonRecord(
-                id=f"lead_live_{target_dom.replace('.', '_')}",
-                first_name="Alex",
-                last_name="Rivera",
-                full_name="Alex Rivera",
-                title=title or "VP of Growth & Revenue",
-                seniority=seniority or "VP",
-                department=department or "Sales & Revenue",
-                company_name=comp_label,
-                company_domain=target_dom,
-                industry=industry or "B2B Software",
-                employee_count=150,
-                employee_range=employee_range or "51-200",
-                location=location or "United States",
-                email=email_res.best_email or f"alex@{target_dom}",
-                email_verified=email_res.confidence >= 0.7,
-                email_confidence=email_res.confidence,
-                email_pattern=email_res.inferred_pattern or "{first}.{last}",
-                phone=phone_res.primary_phone or "+14158905400",
-                phone_type="direct_dial" if phone_res.direct_dial else "switchboard",
-                linkedin_url=f"https://www.linkedin.com/company/{target_dom.split('.')[0]}",
-                technologies=["Google Workspace", "Cloudflare", "HubSpot"],
-                signals=["LIVE_DOMAIN_REVEAL"],
-                buying_intent_score=86,
-                discovery_source="live_domain_spider",
-            )
-            spider.index_person_record(rec)
-            results.append(rec.to_dict())
+    # No fabricated placeholder person. When live discovery returns nothing, the
+    # result is honestly empty — callers use /leads/reveal with a real name+domain
+    # to verify a specific contact.
 
     return {
         "total": len(results),
@@ -448,7 +292,10 @@ def reveal_and_verify_lead_email(
         all_indexed = spider.search_leads(limit=500)
         matched = next((item for item in all_indexed if item["id"] == req.lead_id), None)
         if matched is None:
-            matched = dict(SEED_B2B_DIRECTORY_RECORDS[0])
+            raise HTTPException(
+                status_code=404,
+                detail="Unknown lead_id. Reveal by first_name/last_name + domain, or discover the lead first.",
+            )
         domain = normalize_domain(matched["company_domain"])
         res = find_and_verify_email(
             first_name=matched["first_name"],
@@ -498,10 +345,15 @@ def reveal_and_verify_lead_email(
         else None
     )
 
-    full_name = (req.full_name or f"{req.first_name or ''} {req.last_name or ''}").strip() or "Executive Contact"
+    full_name = (req.full_name or f"{req.first_name or ''} {req.last_name or ''}").strip()
+    if not full_name:
+        raise HTTPException(
+            status_code=400,
+            detail="first_name/last_name (or full_name) is required to reveal a specific person.",
+        )
     parts = full_name.split()
-    first_n = req.first_name or (parts[0] if parts else "Alex")
-    last_n = req.last_name or (parts[-1] if len(parts) > 1 else "Morgan")
+    first_n = req.first_name or parts[0]
+    last_n = req.last_name or (parts[-1] if len(parts) > 1 else "")
     rec_id = f"lead_{hashlib.sha1(f'{full_name.lower()}:{domain}'.encode('utf-8')).hexdigest()[:12]}"
 
     person_rec = DiscoveredPersonRecord(
@@ -522,10 +374,10 @@ def reveal_and_verify_lead_email(
         email_verified=res.confidence >= 0.7,
         email_confidence=res.confidence,
         email_pattern=res.inferred_pattern or "{first}.{last}",
-        phone=(phone_info.primary_phone if phone_info and phone_info.primary_phone else "+14158905400"),
-        phone_type="direct_dial" if (phone_info and phone_info.direct_dial) else "switchboard",
+        phone=(phone_info.primary_phone if phone_info and phone_info.primary_phone else ""),
+        phone_type=("direct_dial" if (phone_info and phone_info.direct_dial) else ("switchboard" if (phone_info and phone_info.primary_phone) else "")),
         linkedin_url=req.linkedin_url or f"https://www.linkedin.com/in/{first_n.lower()}-{last_n.lower()}",
-        technologies=["Salesforce", "HubSpot"],
+        technologies=[],
         signals=["VERIFIED_REVEAL"],
         buying_intent_score=90,
         discovery_source="live_reveal_verified",
@@ -554,9 +406,8 @@ def search_directory_companies(
     store: Any = Depends(get_store),
 ) -> Dict[str, Any]:
     """Search B2B companies by industry, employee count, tech stack, and active hiring signals."""
-    ApolloSpiderEngine(store=store)
     results: List[Dict[str, Any]] = []
-    for item in SEED_B2B_COMPANIES:
+    for item in _load_directory_companies(store):
         if q:
             q_low = q.lower().strip()
             haystack = " ".join(
@@ -707,7 +558,7 @@ def run_live_b2b_spider(
         "items": items,
         "index_stats": {
             "indexed_leads": len(all_indexed),
-            "indexed_companies": len(SEED_B2B_COMPANIES),
+            "indexed_companies": len(_load_directory_companies(store)),
         },
     }
 
@@ -784,28 +635,56 @@ def enroll_directory_leads(
     }
 
 
+def _ensure_saved_searches_table(store: Any) -> None:
+    with store._holder.engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS directory_saved_searches (
+                    id VARCHAR(64) PRIMARY KEY,
+                    tenant_id VARCHAR(128) NOT NULL DEFAULT '',
+                    name VARCHAR(255) NOT NULL,
+                    tab VARCHAR(32) NOT NULL DEFAULT 'leads',
+                    filters_json TEXT NOT NULL DEFAULT '{}',
+                    created_at VARCHAR(64) NOT NULL
+                )
+                """
+            )
+        )
+
+
+def _saved_search_scope(user: Any) -> str:
+    return str(getattr(user, "tenant_id", None) or getattr(user, "user_id", None) or getattr(user, "id", "") or "default")
+
+
 @router.get("/saved-searches")
-def list_saved_searches(user: Any = Depends(get_current_user)) -> Dict[str, Any]:
-    uid = getattr(user, "user_id", None) or getattr(user, "id", "default")
-    items = _SAVED_SEARCHES_MEM.get(uid)
-    if items is None:
-        items = [
-            {
-                "id": "ss_1",
-                "name": "VP Sales & CROs at Hiring Surge SaaS (50-1000 emp)",
-                "tab": "leads",
-                "filters": {"seniority": "C-Suite", "signal": "HIRING_SURGE"},
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-            {
-                "id": "ss_2",
-                "name": "Companies using Segment + HubSpot + Greenhouse",
-                "tab": "companies",
-                "filters": {"technology": "Segment", "hiring_only": True},
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-        ]
-        _SAVED_SEARCHES_MEM[uid] = items
+def list_saved_searches(
+    user: Any = Depends(get_current_user),
+    store: Any = Depends(get_store),
+) -> Dict[str, Any]:
+    """Tenant-scoped saved searches, persisted in `directory_saved_searches`.
+
+    A brand-new tenant has none — we do not inject example searches.
+    """
+    _ensure_saved_searches_table(store)
+    scope = _saved_search_scope(user)
+    with store._holder.engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, name, tab, filters_json, created_at FROM directory_saved_searches "
+                "WHERE tenant_id = :t ORDER BY created_at DESC"
+            ),
+            {"t": scope},
+        ).mappings().all()
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        try:
+            filters = json.loads(r["filters_json"] or "{}")
+        except Exception:
+            filters = {}
+        items.append(
+            {"id": r["id"], "name": r["name"], "tab": r["tab"], "filters": filters, "created_at": r["created_at"]}
+        )
     return {"items": items}
 
 
@@ -813,8 +692,10 @@ def list_saved_searches(user: Any = Depends(get_current_user)) -> Dict[str, Any]
 def create_saved_search(
     req: SaveSearchRequest,
     user: Any = Depends(get_current_user),
+    store: Any = Depends(get_store),
 ) -> Dict[str, Any]:
-    uid = getattr(user, "user_id", None) or getattr(user, "id", "default")
+    _ensure_saved_searches_table(store)
+    scope = _saved_search_scope(user)
     entry = {
         "id": f"ss_{uuid.uuid4().hex[:8]}",
         "name": req.name.strip(),
@@ -822,7 +703,21 @@ def create_saved_search(
         "filters": req.filters,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    _SAVED_SEARCHES_MEM.setdefault(uid, []).insert(0, entry)
+    with store._holder.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO directory_saved_searches (id, tenant_id, name, tab, filters_json, created_at) "
+                "VALUES (:id, :t, :name, :tab, :filters, :created)"
+            ),
+            {
+                "id": entry["id"],
+                "t": scope,
+                "name": entry["name"],
+                "tab": entry["tab"],
+                "filters": json.dumps(entry["filters"]),
+                "created": entry["created_at"],
+            },
+        )
     return entry
 
 
@@ -835,7 +730,7 @@ def get_directory_stats(
     leads = spider.search_leads(limit=500)
     return {
         "indexed_leads": len(leads),
-        "indexed_companies": len(SEED_B2B_COMPANIES),
+        "indexed_companies": len(_load_directory_companies(store)),
         "tech_signatures_count": 58,
         "verification_layers": [
             "DNS_MX_RESOLUTION",

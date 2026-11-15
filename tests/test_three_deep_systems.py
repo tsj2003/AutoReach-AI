@@ -125,8 +125,12 @@ def test_system_1_linkedin_voyager_protocol_and_api(app_client):
     )
     assert r_eng.status_code == 200, r_eng.text
     eng_data = r_eng.json()
-    assert eng_data["count"] >= 2
-    assert eng_data["persisted_signals"] >= 2
+    # Honest contract: with no reachable live Voyager session (sandbox/no real
+    # LinkedIn), the scrape returns zero real engagers. We never fabricate
+    # famous-exec prospects. The endpoint still responds OK, well-formed.
+    assert eng_data["ok"] is True
+    assert isinstance(eng_data["count"], int)
+    assert eng_data["persisted_signals"] == eng_data["count"]
 
     # 6. Sync LinkedIn inbox into Unibox 2.0
     r_sync = client.post(
@@ -189,6 +193,8 @@ def test_system_2_apollo_spider_and_osint_phones(app_client):
     assert "+12125550144" in e164_set
 
     # 3. Run /api/directory/spider/run, /api/directory/leads/search, and /api/directory/phones/osint
+    # Directory starts EMPTY (no seeded famous execs). Live crawling is disabled in
+    # tests, so spider/run discovers nothing until a real crawl or reveal runs.
     r_spider = client.post(
         "/api/directory/spider/run",
         headers=headers,
@@ -201,26 +207,43 @@ def test_system_2_apollo_spider_and_osint_phones(app_client):
         },
     )
     assert r_spider.status_code == 200, r_spider.text
-    assert r_spider.json()["discovered_count"] >= 1
-    assert r_spider.json()["index_stats"]["indexed_leads"] >= 8
+    assert r_spider.json()["discovered_count"] == 0
+    assert r_spider.json()["index_stats"]["indexed_leads"] == 0
+
+    # Reveal a specific person by real name + domain (offline permutation path). This
+    # verifies + indexes exactly one real lead — no fabricated rows.
+    r_reveal = client.post(
+        "/api/directory/leads/reveal",
+        headers=headers,
+        json={
+            "first_name": "Sarah",
+            "last_name": "Chen",
+            "domain": "linear.app",
+            "reveal_email": True,
+            "extract_phone": False,
+        },
+    )
+    assert r_reveal.status_code == 200, r_reveal.text
+    assert "@linear.app" in (r_reveal.json()["lead"]["email"] or "")
 
     r_search = client.post(
         "/api/directory/leads/search",
         headers=headers,
-        json={"title": "VP", "verify_smtp": True},
+        json={"title": "VP"},
     )
     assert r_search.status_code == 200
     assert r_search.json()["total"] >= 1
-    first_lead = r_search.json()["leads"][0]
-    assert first_lead["phone"].startswith("+1")
+    assert any(l["company_domain"] == "linear.app" for l in r_search.json()["leads"])
 
+    # Phone OSINT extraction logic is covered above with an injected fetcher. The API
+    # endpoint returns an honest (possibly empty) result when no live crawl runs.
     r_osint = client.post(
         "/api/directory/phones/osint",
         headers=headers,
         json={"domain": "stripe.com", "company_name": "Stripe", "live_crawl": False},
     )
     assert r_osint.status_code == 200
-    assert r_osint.json()["primary_phone"].startswith("+1")
+    assert "primary_phone" in r_osint.json()
 
 
 def test_system_3_five_layer_visitor_identity_graph(app_client):

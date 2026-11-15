@@ -56,20 +56,6 @@ RESIDENTIAL_AND_CLOUD_NOISE: frozenset[str] = frozenset({
     "leaseweb", "scaleway", "fly.io", "render", "netlify", "vercel",
 })
 
-# Known enterprise/tech static IP ranges for deterministic fast lookup & testing
-KNOWN_TECH_CORP_CIDR_PREFIXES: dict[str, tuple[str, str, str]] = {
-    "198.27.128.": ("Stripe", "stripe.com", "San Francisco, CA"),
-    "192.0.78.": ("Automattic", "automattic.com", "San Francisco, CA"),
-    "104.16.100.": ("Linear", "linear.app", "San Francisco, CA"),
-    "185.199.108.": ("GitHub", "github.com", "San Francisco, CA"),
-    "162.159.135.": ("Figma", "figma.com", "San Francisco, CA"),
-    "199.232.68.": ("Notion", "notion.so", "San Francisco, CA"),
-    "151.101.1.": ("Vercel", "vercel.com", "San Francisco, CA"),
-    "13.107.42.": ("Datadog", "datadoghq.com", "New York, NY"),
-    "52.84.12.": ("Retool", "retool.com", "San Francisco, CA"),
-    "34.102.136.": ("Vanta", "vanta.com", "San Francisco, CA"),
-}
-
 HIGH_INTENT_PAGE_WEIGHTS: dict[str, int] = {
     "/pricing": 30,
     "/demo": 35,
@@ -506,21 +492,6 @@ def deanonymize_visitor_ip(
                 intel = crawl_and_fingerprint_company(dom, max_subpages=3, timeout=timeout)
                 if intel.company_name:
                     result.company_name = intel.company_name
-                result.decision_makers = intel.decision_makers[:5]
-                result.technologies = intel.technologies[:15]
-            return result
-
-    for prefix, (comp_name, comp_dom, comp_loc) in KNOWN_TECH_CORP_CIDR_PREFIXES.items():
-        if ip_clean.startswith(prefix):
-            result.is_corporate = True
-            result.company_name = comp_name
-            result.company_domain = comp_dom
-            result.location = comp_loc
-            result.confidence = 0.90
-            result.resolution_method = "corporate_cidr_match"
-            result.resolution_layer = 4
-            if enrich_company:
-                intel = crawl_and_fingerprint_company(comp_dom, max_subpages=2, timeout=timeout)
                 result.decision_makers = intel.decision_makers[:5]
                 result.technologies = intel.technologies[:15]
             return result
