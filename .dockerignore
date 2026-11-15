@@ -9,6 +9,7 @@ Thumbs.db
 
 # Azure/local deployment session state
 .copilot-azure
+.azure-cli-local
 .do
 .ralph
 
