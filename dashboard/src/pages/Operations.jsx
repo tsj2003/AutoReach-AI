@@ -17,19 +17,24 @@ function mailboxLabel(counts) {
 export default function Operations() {
   const [summary, setSummary] = useState(null);
   const [readiness, setReadiness] = useState(null);
+  const [readinessLoading, setReadinessLoading] = useState(true);
   const [err, setErr] = useState("");
 
   function load() {
     setErr("");
-    Promise.all([
-      api.get("/api/operations/mission-control"),
-      api.get("/api/operations/readiness?deep=true"),
-    ])
-      .then(([mission, ready]) => {
-        setSummary(mission);
-        setReadiness(ready);
-      })
+    // Render the page as soon as the fast mission-control call returns.
+    api
+      .get("/api/operations/mission-control")
+      .then(setSummary)
       .catch((e) => setErr(e.message));
+    // The deep readiness probe (DB + Redis + Celery) can take ~10s; load it
+    // independently so it never blocks the rest of the control room.
+    setReadinessLoading(true);
+    api
+      .get("/api/operations/readiness?deep=true")
+      .then(setReadiness)
+      .catch(() => setReadiness(null))
+      .finally(() => setReadinessLoading(false));
   }
 
   useEffect(load, []);
@@ -97,13 +102,15 @@ export default function Operations() {
             <HeaderTag variant={1} text="READINESS" />
             <h3 style={{ marginTop: 8 }}>Production Readiness</h3>
             <p className="muted small">
-              {readiness?.is_production_ready
+              {readinessLoading
+                ? "Running deep readiness check (database, Redis, worker)…"
+                : readiness?.is_production_ready
                 ? "Required launch configuration is present."
                 : `${readiness?.missing_required?.length || 0} required check(s) failing.`}
             </p>
           </div>
-          <GradientPill variant={readiness?.is_production_ready ? "mint" : "yellow"}>
-            {readiness?.is_production_ready ? "Ready" : "Needs work"}
+          <GradientPill variant={readinessLoading ? "yellow" : readiness?.is_production_ready ? "mint" : "yellow"}>
+            {readinessLoading ? "Checking…" : readiness?.is_production_ready ? "Ready" : "Needs work"}
           </GradientPill>
         </div>
         <div className="readiness-grid">
