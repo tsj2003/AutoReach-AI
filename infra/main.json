@@ -1,0 +1,672 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "4512283746627804920"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "attainly",
+      "metadata": {
+        "description": "Short prefix used to name Azure resources."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "application": "attainly",
+        "managedBy": "app-onboard",
+        "app-onboard-skill": "true",
+        "app-onboard-session-id": "9e432501-d3da-4279-bfe5-6060f36cb5f8",
+        "created-at": "2026-07-28T07:49:13Z",
+        "environment": "prod",
+        "deployed-by": "tarandeepjuneja11@gmail.com"
+      },
+      "metadata": {
+        "description": "Application tags applied to all resources."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+      "metadata": {
+        "description": "Container image used by all Container Apps. The workflow updates this after pushing a build."
+      }
+    },
+    "deployerObjectId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Microsoft Entra object ID for the deployer. When provided, grants Key Vault Secrets Officer on the generated vault."
+      }
+    },
+    "postgresAdminLogin": {
+      "type": "string",
+      "defaultValue": "autoreachadmin",
+      "metadata": {
+        "description": "PostgreSQL administrator login."
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator password."
+      }
+    },
+    "jwtSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Shared JWT signing secret."
+      }
+    },
+    "sessionSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Shared session secret."
+      }
+    },
+    "credentialEncryptionKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Fernet key used to encrypt stored credentials."
+      }
+    },
+    "redisUrlOverride": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Redis/Valkey connection URL used by Celery, mailbox health, and dispatch queues. Provide an existing endpoint; this template does not provision Redis because Azure Cache creation is region/SKU restricted for this subscription."
+      }
+    },
+    "publicBaseUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Public base URL for the deployed application."
+      }
+    },
+    "googleClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Google OAuth client ID."
+      }
+    },
+    "googleClientSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Google OAuth client secret."
+      }
+    },
+    "googleSignInClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Google Sign-In client ID."
+      }
+    },
+    "geminiApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Gemini API key."
+      }
+    },
+    "openAiApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "OpenAI API key."
+      }
+    },
+    "anthropicApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Anthropic API key."
+      }
+    },
+    "azureApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure AI API key."
+      }
+    },
+    "phoenixEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Phoenix endpoint used for tracing."
+      }
+    },
+    "calcomWebhookSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Webhook secret for Cal.com."
+      }
+    },
+    "sentryDsn": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Sentry DSN."
+      }
+    },
+    "posthogApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "PostHog API key."
+      }
+    },
+    "posthogHost": {
+      "type": "string",
+      "defaultValue": "https://us.i.posthog.com",
+      "metadata": {
+        "description": "PostHog host URL."
+      }
+    },
+    "firecrawlApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Firecrawl API key."
+      }
+    },
+    "razorpayKeyId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Razorpay key ID."
+      }
+    },
+    "razorpayKeySecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Razorpay key secret."
+      }
+    },
+    "gmailSender": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Gmail sender address."
+      }
+    },
+    "gmailTokenPath": {
+      "type": "string",
+      "defaultValue": "token.json",
+      "metadata": {
+        "description": "Path to the Gmail token file inside the container."
+      }
+    },
+    "gmailDryRun": {
+      "type": "string",
+      "defaultValue": "1",
+      "metadata": {
+        "description": "Whether Gmail dry-run mode should stay enabled."
+      }
+    },
+    "workerQueues": {
+      "type": "string",
+      "defaultValue": "engine,maintenance,standard-agents",
+      "metadata": {
+        "description": "Worker queue list for Celery."
+      }
+    },
+    "intentHoursBack": {
+      "type": "string",
+      "defaultValue": "24",
+      "metadata": {
+        "description": "Hours of history to load for intent ingestion."
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id)]",
+    "logAnalyticsName": "[toLower(format('{0}-law', parameters('namePrefix')))]",
+    "containerRegistryName": "[toLower(format('ar{0}', variables('uniqueSuffix')))]",
+    "keyVaultName": "[toLower(format('kv{0}', variables('uniqueSuffix')))]",
+    "postgresServerName": "[toLower(format('pg{0}', variables('uniqueSuffix')))]",
+    "postgresDatabaseName": "autoreach",
+    "webAppName": "[format('{0}-web', parameters('namePrefix'))]",
+    "workerAppName": "[format('{0}-worker', parameters('namePrefix'))]",
+    "beatAppName": "[format('{0}-beat', parameters('namePrefix'))]",
+    "keyVaultSecretsOfficerRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+    "redisUrl": "[parameters('redisUrlOverride')]",
+    "optionalSecretValues": "[concat(if(empty(parameters('googleClientSecret')), createArray(), createArray(createObject('name', 'google-client-secret', 'value', parameters('googleClientSecret')))), if(empty(parameters('geminiApiKey')), createArray(), createArray(createObject('name', 'gemini-api-key', 'value', parameters('geminiApiKey')))), if(empty(parameters('openAiApiKey')), createArray(), createArray(createObject('name', 'openai-api-key', 'value', parameters('openAiApiKey')))), if(empty(parameters('anthropicApiKey')), createArray(), createArray(createObject('name', 'anthropic-api-key', 'value', parameters('anthropicApiKey')))), if(empty(parameters('azureApiKey')), createArray(), createArray(createObject('name', 'azure-api-key', 'value', parameters('azureApiKey')))), if(empty(parameters('calcomWebhookSecret')), createArray(), createArray(createObject('name', 'calcom-webhook-secret', 'value', parameters('calcomWebhookSecret')))), if(empty(parameters('sentryDsn')), createArray(), createArray(createObject('name', 'sentry-dsn', 'value', parameters('sentryDsn')))), if(empty(parameters('posthogApiKey')), createArray(), createArray(createObject('name', 'posthog-api-key', 'value', parameters('posthogApiKey')))), if(empty(parameters('firecrawlApiKey')), createArray(), createArray(createObject('name', 'firecrawl-api-key', 'value', parameters('firecrawlApiKey')))), if(empty(parameters('razorpayKeySecret')), createArray(), createArray(createObject('name', 'razorpay-key-secret', 'value', parameters('razorpayKeySecret')))))]",
+    "baseEnvVars": [
+      {
+        "name": "DATABASE_URL",
+        "secretRef": "database-url"
+      },
+      {
+        "name": "REDIS_URL",
+        "secretRef": "redis-url"
+      },
+      {
+        "name": "AUTOREACH_JWT_SECRET",
+        "secretRef": "jwt-secret"
+      },
+      {
+        "name": "AUTOREACH_SESSION_SECRET",
+        "secretRef": "session-secret"
+      },
+      {
+        "name": "AUTOREACH_CREDENTIAL_ENCRYPTION_KEY",
+        "secretRef": "credential-encryption-key"
+      },
+      {
+        "name": "AUTOREACH_ENABLE_CONSOLE",
+        "value": "0"
+      },
+      {
+        "name": "AUTOREACH_RUNTIME_SMART_DISPATCH",
+        "value": "1"
+      },
+      {
+        "name": "AUTOREACH_WORKER_QUEUES",
+        "value": "[parameters('workerQueues')]"
+      },
+      {
+        "name": "AUTOREACH_INTENT_HOURS_BACK",
+        "value": "[parameters('intentHoursBack')]"
+      },
+      {
+        "name": "AUTOREACH_PUBLIC_BASE_URL",
+        "value": "[parameters('publicBaseUrl')]"
+      },
+      {
+        "name": "GOOGLE_CLIENT_ID",
+        "value": "[parameters('googleClientId')]"
+      },
+      {
+        "name": "GOOGLE_SIGNIN_CLIENT_ID",
+        "value": "[parameters('googleSignInClientId')]"
+      },
+      {
+        "name": "AUTOREACH_PHOENIX_ENDPOINT",
+        "value": "[parameters('phoenixEndpoint')]"
+      },
+      {
+        "name": "POSTHOG_HOST",
+        "value": "[parameters('posthogHost')]"
+      },
+      {
+        "name": "RAZORPAY_KEY_ID",
+        "value": "[parameters('razorpayKeyId')]"
+      },
+      {
+        "name": "AUTOREACH_GMAIL_SENDER",
+        "value": "[parameters('gmailSender')]"
+      },
+      {
+        "name": "AUTOREACH_GMAIL_TOKEN_PATH",
+        "value": "[parameters('gmailTokenPath')]"
+      },
+      {
+        "name": "AUTOREACH_GMAIL_DRY_RUN",
+        "value": "[parameters('gmailDryRun')]"
+      }
+    ],
+    "optionalEnvVars": "[concat(if(empty(parameters('googleClientSecret')), createArray(), createArray(createObject('name', 'GOOGLE_CLIENT_SECRET', 'secretRef', 'google-client-secret'))), if(empty(parameters('geminiApiKey')), createArray(), createArray(createObject('name', 'GEMINI_API_KEY', 'secretRef', 'gemini-api-key'))), if(empty(parameters('openAiApiKey')), createArray(), createArray(createObject('name', 'OPENAI_API_KEY', 'secretRef', 'openai-api-key'))), if(empty(parameters('anthropicApiKey')), createArray(), createArray(createObject('name', 'ANTHROPIC_API_KEY', 'secretRef', 'anthropic-api-key'))), if(empty(parameters('azureApiKey')), createArray(), createArray(createObject('name', 'AZURE_API_KEY', 'secretRef', 'azure-api-key'))), if(empty(parameters('calcomWebhookSecret')), createArray(), createArray(createObject('name', 'CALCOM_WEBHOOK_SECRET', 'secretRef', 'calcom-webhook-secret'))), if(empty(parameters('sentryDsn')), createArray(), createArray(createObject('name', 'SENTRY_DSN', 'secretRef', 'sentry-dsn'))), if(empty(parameters('posthogApiKey')), createArray(), createArray(createObject('name', 'POSTHOG_API_KEY', 'secretRef', 'posthog-api-key'))), if(empty(parameters('firecrawlApiKey')), createArray(), createArray(createObject('name', 'FIRECRAWL_API_KEY', 'secretRef', 'firecrawl-api-key'))), if(empty(parameters('razorpayKeySecret')), createArray(), createArray(createObject('name', 'RAZORPAY_KEY_SECRET', 'secretRef', 'razorpay-key-secret'))))]",
+    "commonEnvVars": "[concat(variables('baseEnvVars'), variables('optionalEnvVars'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2025-02-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30,
+        "features": {
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        }
+      }
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2023-06-01-preview",
+      "name": "[variables('containerRegistryName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "Basic"
+      },
+      "properties": {
+        "adminUserEnabled": true,
+        "anonymousPullEnabled": false,
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2024-11-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 90,
+        "publicNetworkAccess": "Disabled",
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2024-08-01",
+      "name": "[variables('postgresServerName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "Standard_B1ms",
+        "tier": "Burstable"
+      },
+      "properties": {
+        "administratorLogin": "[parameters('postgresAdminLogin')]",
+        "administratorLoginPassword": "[parameters('postgresAdminPassword')]",
+        "version": "16",
+        "storage": {
+          "storageSizeGB": 32
+        },
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Disabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        },
+        "network": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', variables('postgresServerName'), variables('postgresDatabaseName'))]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', variables('postgresServerName'), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-10-02-preview",
+      "name": "[format('{0}-env', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2025-02-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2025-02-01').primarySharedKey]"
+          }
+        },
+        "publicNetworkAccess": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('webAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "allowInsecure": false,
+            "transport": "auto"
+          },
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').loginServer]",
+              "username": "[variables('containerRegistryName')]",
+              "passwordSecretRef": "acr-password"
+            }
+          ],
+          "secrets": "[concat(createArray(createObject('name', 'database-url', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName, variables('postgresDatabaseName'))), createObject('name', 'redis-url', 'value', variables('redisUrl')), createObject('name', 'jwt-secret', 'value', parameters('jwtSecret')), createObject('name', 'session-secret', 'value', parameters('sessionSecret')), createObject('name', 'credential-encryption-key', 'value', parameters('credentialEncryptionKey')), createObject('name', 'acr-password', 'value', listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').passwords[0].value)), variables('optionalSecretValues'))]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "autoreach-web",
+              "image": "[parameters('containerImage')]",
+              "env": "[variables('commonEnvVars')]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              }
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 3
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('workerAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').loginServer]",
+              "username": "[variables('containerRegistryName')]",
+              "passwordSecretRef": "acr-password"
+            }
+          ],
+          "secrets": "[concat(createArray(createObject('name', 'database-url', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName, variables('postgresDatabaseName'))), createObject('name', 'redis-url', 'value', variables('redisUrl')), createObject('name', 'jwt-secret', 'value', parameters('jwtSecret')), createObject('name', 'session-secret', 'value', parameters('sessionSecret')), createObject('name', 'credential-encryption-key', 'value', parameters('credentialEncryptionKey')), createObject('name', 'acr-password', 'value', listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').passwords[0].value)), variables('optionalSecretValues'))]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "autoreach-worker",
+              "image": "[parameters('containerImage')]",
+              "command": [
+                "celery"
+              ],
+              "args": [
+                "-A",
+                "celery_worker.celery_app",
+                "worker",
+                "--loglevel=info",
+                "--concurrency=2",
+                "-Q",
+                "[parameters('workerQueues')]"
+              ],
+              "env": "[variables('commonEnvVars')]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              }
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 2
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('beatAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').loginServer]",
+              "username": "[variables('containerRegistryName')]",
+              "passwordSecretRef": "acr-password"
+            }
+          ],
+          "secrets": "[concat(createArray(createObject('name', 'database-url', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName, variables('postgresDatabaseName'))), createObject('name', 'redis-url', 'value', variables('redisUrl')), createObject('name', 'jwt-secret', 'value', parameters('jwtSecret')), createObject('name', 'session-secret', 'value', parameters('sessionSecret')), createObject('name', 'credential-encryption-key', 'value', parameters('credentialEncryptionKey')), createObject('name', 'acr-password', 'value', listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').passwords[0].value)), variables('optionalSecretValues'))]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "autoreach-beat",
+              "image": "[parameters('containerImage')]",
+              "command": [
+                "celery"
+              ],
+              "args": [
+                "-A",
+                "celery_worker.celery_app",
+                "beat",
+                "--loglevel=info"
+              ],
+              "env": "[variables('commonEnvVars')]",
+              "resources": {
+                "cpu": "[json('0.25')]",
+                "memory": "0.5Gi"
+              }
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('deployerObjectId')))]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('deployerObjectId'), 'key-vault-secrets-officer')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultSecretsOfficerRoleDefinitionId')]",
+        "principalId": "[parameters('deployerObjectId')]",
+        "principalType": "User"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "containerRegistryLoginServer": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-06-01-preview').loginServer]"
+    },
+    "containerAppsEnvironmentId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2024-11-01').vaultUri]"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2025-02-01').customerId]"
+    },
+    "webAppFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('webAppName')), '2025-01-01').configuration.ingress.fqdn]"
+    },
+    "webAppUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/', reference(resourceId('Microsoft.App/containerApps', variables('webAppName')), '2025-01-01').configuration.ingress.fqdn)]"
+    },
+    "cockpitUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/app/', reference(resourceId('Microsoft.App/containerApps', variables('webAppName')), '2025-01-01').configuration.ingress.fqdn)]"
+    },
+    "postgresFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName]"
+    },
+    "redisHostName": {
+      "type": "string",
+      "value": "external-redis-configured"
+    }
+  }
+}

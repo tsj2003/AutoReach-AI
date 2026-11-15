@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — AutoReach-AI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚀%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['DM Serif Display', 'serif']
+                    },
+                    colors: {
+                        darkBg: '#0A0A0A',
+                        glassBg: 'rgba(17, 17, 17, 0.65)',
+                        accent: '#10B981',
+                        coral: '#F43F5E'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body {
+            background-color: #0A0A0A;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(244, 63, 94, 0.08) 0%, transparent 40%);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-300 font-sans">
+    <div class="max-w-3xl mx-auto px-6 py-16">
+        <a href="/" class="text-accent hover:text-accent/80 text-sm font-semibold mb-8 inline-block transition duration-200 transform hover:scale-[1.04] active:scale-[0.97]">&larr; Back to Home</a>
+        <h1 class="text-4xl font-serif font-extrabold text-white tracking-tight mb-2">Privacy Policy</h1>
+        <p class="text-sm text-slate-500 mb-10">Last updated: May 21, 2026</p>
+
+        <div class="space-y-8 text-sm leading-relaxed">
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">1. Information We Collect</h2>
+                <p>When you create an account, we collect your <strong class="text-white">email address</strong> and a hashed password. When you connect a Google account via OAuth, we store an <strong class="text-white">OAuth access token</strong> and <strong class="text-white">refresh token</strong> to send emails on your behalf. We also retrieve your <strong class="text-white">Gmail address</strong> to display in your dashboard.</p>
+                <p class="mt-2">We collect the email addresses of <strong class="text-white">contacts you upload</strong> via CSV. These are stored in our database solely to execute your email campaigns.</p>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">2. How We Use Your Data</h2>
+                <ul class="list-disc list-inside space-y-1.5 text-slate-400">
+                    <li>To authenticate you and provide access to the platform.</li>
+                    <li>To send emails from your connected Gmail account(s) on your behalf.</li>
+                    <li>To personalize outgoing emails using the Gemini AI API (your email content is sent to Google's Gemini API for processing).</li>
+                    <li>To detect replies and classify them for your review.</li>
+                    <li>To process payments via Razorpay for subscription upgrades.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">3. What We Do NOT Do</h2>
+                <ul class="list-disc list-inside space-y-1.5 text-slate-400">
+                    <li>We do <strong class="text-coral">not</strong> sell, rent, or share your personal data or email content with third parties for advertising purposes.</li>
+                    <li>We do <strong class="text-coral">not</strong> use your email data to train machine learning models.</li>
+                    <li>We do <strong class="text-coral">not</strong> store the content of emails you receive (only reply snippets for classification).</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">4. Data Storage & Security</h2>
+                <p>Your data is stored in a managed PostgreSQL database hosted on secure cloud infrastructure. OAuth tokens are stored encrypted at rest. All connections use TLS encryption in transit.</p>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">5. Third-Party Services</h2>
+                <ul class="list-disc list-inside space-y-1.5 text-slate-400">
+                    <li><strong class="text-white">Google Gmail API</strong> — for sending emails and reading replies.</li>
+                    <li><strong class="text-white">Google Gemini API</strong> — for AI email personalization.</li>
+                    <li><strong class="text-white">Razorpay</strong> — for payment processing.</li>
+                    <li><strong class="text-white">Sentry</strong> — for error monitoring (no personal data is sent).</li>
+                    <li><strong class="text-white">PostHog</strong> — for anonymized product analytics.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">6. Your Rights</h2>
+                <p>You may revoke Google OAuth access at any time from your <a href="https://myaccount.google.com/permissions" class="text-accent hover:underline" target="_blank">Google Account permissions page</a>. You may request deletion of your account and all associated data by emailing us at the address below. We will process deletion requests within 30 days.</p>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">7. Data Retention</h2>
+                <p>We retain your data for as long as your account is active. If you delete your account, all personal data, OAuth tokens, campaign data, and contact lists are permanently deleted within 30 days.</p>
+            </section>
+
+            <section>
+                <h2 class="text-lg font-serif font-bold text-white mb-3">8. Contact</h2>
+                <p>For privacy-related questions, contact us at: <a href="mailto:privacy@autoreach-ai.com" class="text-accent hover:underline">privacy@autoreach-ai.com</a></p>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

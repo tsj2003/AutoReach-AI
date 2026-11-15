@@ -1,0 +1,111 @@
+{% extends "_base.html" %}
+{% block title %}{{ engagement.customer_name }} · AutoReach Cockpit{% endblock %}
+{% block content %}
+
+<section class="page-head">
+  <div>
+    <h1>{{ engagement.customer_name }}</h1>
+    <div class="muted">{{ engagement.id }} · <span class="pill pill-{{ engagement.status }}">{{ engagement.status }}</span></div>
+  </div>
+  <nav class="subnav">
+    <a href="/engagements/{{ engagement.id }}/prospects">Prospects ({{ prospect_count }})</a>
+    <a href="/engagements/{{ engagement.id }}/replies">Replies{% if pending_replies %} <span class="badge">{{ pending_replies }}</span>{% endif %}</a>
+    <a href="/engagements/{{ engagement.id }}/meetings">Meetings</a>
+  </nav>
+</section>
+
+<section class="cards">
+  <div class="card">
+    <h3>P&amp;L</h3>
+    {% if report %}
+      <dl>
+        <dt>Booked</dt><dd>{{ report.booked_count }}</dd>
+        <dt>Qualified</dt><dd>{{ report.qualified_count }}</dd>
+        <dt>Revenue</dt><dd>{{ report.revenue_cents|cents }}</dd>
+        <dt>Cost</dt><dd>{{ report.cost_cents|cents }}</dd>
+        <dt>Margin</dt><dd>{{ report.margin_cents|cents }} ({{ report.margin_pct|pct }})</dd>
+      </dl>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Offer</h3>
+    <p>{{ engagement.offer }}</p>
+    <h4>ICP</h4>
+    <p class="muted">{{ engagement.icp_description }}</p>
+    {% if engagement.booking_url %}
+      <p><strong>Booking:</strong> <a href="{{ engagement.booking_url }}">{{ engagement.booking_url }}</a></p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Agents</h3>
+    {% if agents %}
+      <ul class="bare">
+      {% for a in agents %}
+        <li><code>{{ a.id }}</code> · {{ a.runner_kind }} · <span class="pill pill-{{ a.status }}">{{ a.status }}</span></li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No agents yet.</p>
+    {% endif %}
+    <form method="post" action="/engagements/{{ engagement.id }}/tick" class="inline">
+      <button class="btn" type="submit">Tick (plan + 1 batch)</button>
+    </form>
+    <form method="post" action="/engagements/{{ engagement.id }}/drain" class="inline">
+      <button class="btn" type="submit">Drain</button>
+    </form>
+    {% if engagement.status == "active" %}
+    <form method="post" action="/engagements/{{ engagement.id }}/pause" class="inline">
+      <button class="btn danger" type="submit">Pause engagement</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+{% if jobs_by_state.awaiting_approval %}
+<section>
+  <h2>HITL approval queue ({{ jobs_by_state.awaiting_approval|length }})</h2>
+  <table class="data">
+    <thead><tr><th>Job</th><th>Kind</th><th>Prospect</th><th>To</th><th>Subject preview</th><th></th></tr></thead>
+    <tbody>
+    {% for j in jobs_by_state.awaiting_approval %}
+      <tr>
+        <td><code>{{ j.id }}</code></td>
+        <td>{{ j.kind.value }}</td>
+        <td><code class="muted">{{ j.prospect_id or "—" }}</code></td>
+        <td>{{ j.payload.get("to_email", "—") }}</td>
+        <td>{{ j.payload.get("subject_template", "")[:60] }}</td>
+        <td>
+          <form method="post" action="/jobs/{{ j.id }}/approve" class="inline">
+            <button class="btn primary small" type="submit">Approve</button>
+          </form>
+          <form method="post" action="/jobs/{{ j.id }}/reject" class="inline">
+            <button class="btn danger small" type="submit">Reject</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section>
+  <h2>Recent events</h2>
+  {% if recent_events %}
+  <ul class="event-feed">
+    {% for ev in recent_events %}
+      <li>
+        <span class="ev-kind">{{ ev.kind.value }}</span>
+        <span class="muted small">{{ ev.occurred_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</span>
+        {% if ev.job_id %}<code class="muted small">{{ ev.job_id }}</code>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">No events yet.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

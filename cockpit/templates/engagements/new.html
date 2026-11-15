@@ -1,0 +1,42 @@
+{% extends "_base.html" %}
+{% block title %}New engagement · AutoReach Cockpit{% endblock %}
+{% block content %}
+<section class="page-head"><h1>New engagement</h1></section>
+
+<form method="post" action="/engagements" class="form">
+  <label>Customer name
+    <input type="text" name="customer_name" required placeholder="AutoReach (self), Acme Inc, etc." />
+  </label>
+
+  <label>Offer (one paragraph)
+    <textarea name="offer" rows="3" required placeholder="What you're selling, in a way a B2B founder can grok."></textarea>
+  </label>
+
+  <label>ICP description
+    <textarea name="icp_description" rows="2" required placeholder="Who you're selling to. e.g. 'seed–series A B2B SaaS founders, US/EU, 5–50 employees'"></textarea>
+  </label>
+
+  <label>Booking URL (Cal.com / Calendly)
+    <input type="url" name="booking_url" placeholder="https://cal.com/yourname/intro" />
+  </label>
+
+  <fieldset class="grid-3">
+    <label>Monthly meeting target
+      <input type="number" name="monthly_meeting_target" min="0" value="20" />
+    </label>
+    <label>Price per qualified meeting (cents)
+      <input type="number" name="price_per_outcome_cents" min="0" value="50000" />
+      <small class="muted">$500 = 50000</small>
+    </label>
+    <label>Monthly budget cap (cents)
+      <input type="number" name="monthly_budget_cents" min="0" value="100000" />
+      <small class="muted">Hard cap. Optional.</small>
+    </label>
+  </fieldset>
+
+  <div class="actions">
+    <button class="btn primary" type="submit">Create engagement</button>
+    <a class="btn" href="/engagements">Cancel</a>
+  </div>
+</form>
+{% endblock %}

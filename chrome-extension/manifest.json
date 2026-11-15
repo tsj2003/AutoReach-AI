@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Attainly LinkedIn Connector",
+  "version": "1.0.0",
+  "description": "Pair your logged-in LinkedIn Chrome session with Attainly. No password. Cookies stay encrypted at rest.",
+  "action": {
+    "default_title": "Connect LinkedIn to Attainly",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "permissions": ["cookies", "storage"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://*.linkedin.com/*",
+    "https://*.azurecontainerapps.io/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

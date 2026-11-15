@@ -1,0 +1,11 @@
+#!/bin/bash
+# AutoReach Quick Commands Wrapper
+# Usage: ./q s emails.csv email@gmail.com  # Start
+#        ./q x                              # Stop
+#        ./q t                              # Status
+#        ./q l                              # Logs
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_DIR"
+
+python3 quick_cli.py "$@"

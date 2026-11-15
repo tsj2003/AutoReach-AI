@@ -1,0 +1,59 @@
+import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext.jsx";
+import Layout from "./components/Layout.jsx";
+import Login from "./pages/Login.jsx";
+import Signup from "./pages/Signup.jsx";
+import Landing from "./pages/Landing.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Campaigns from "./pages/Campaigns.jsx";
+import CampaignDetail from "./pages/CampaignDetail.jsx";
+import Contacts from "./pages/Contacts.jsx";
+import Inbox from "./pages/Inbox.jsx";
+import Billing from "./pages/Billing.jsx";
+import Operations from "./pages/Operations.jsx";
+import OperationsOnboarding from "./pages/OperationsOnboarding.jsx";
+import Mailboxes from "./pages/Mailboxes.jsx";
+import LinkedIn from "./pages/LinkedIn.jsx";
+import ComingSoon from "./pages/ComingSoon.jsx";
+
+function Protected({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="center muted">Loading…</div>;
+  if (!user) return <Navigate to="/landing" replace />;
+  return children;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/landing" element={<Landing />} />
+      {/* Deferred surfaces — full UI on backup/full-product-surface */}
+      <Route path="/playbooks" element={<ComingSoon title="AI Playbooks (deferred)" />} />
+      <Route
+        path="/"
+        element={
+          <Protected>
+            <Layout />
+          </Protected>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="campaigns" element={<Campaigns />} />
+        <Route path="campaigns/:id" element={<CampaignDetail />} />
+        <Route path="campaigns/:id/contacts" element={<Contacts />} />
+        <Route path="campaigns/:id/inbox" element={<Inbox />} />
+        <Route path="integrations" element={<ComingSoon title="Integrations & MCP (deferred)" />} />
+        <Route path="analytics" element={<ComingSoon title="Analytics extras (deferred)" />} />
+        <Route path="onboarding" element={<OperationsOnboarding />} />
+        <Route path="operations" element={<Operations />} />
+        <Route path="operations/mailboxes" element={<Mailboxes />} />
+        <Route path="operations/linkedin" element={<LinkedIn />} />
+        <Route path="operations/signals" element={<ComingSoon title="Signal sources (deferred)" />} />
+        <Route path="operations/onboarding" element={<OperationsOnboarding />} />
+        <Route path="billing" element={<Billing />} />
+      </Route>
+    </Routes>
+  );
+}

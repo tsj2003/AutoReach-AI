@@ -1,0 +1,112 @@
+{% extends "_base.html" %}
+{% block title %}Replies · {{ engagement.customer_name }}{% endblock %}
+{% block content %}
+
+<section class="page-head">
+  <div>
+    <h1>Reply triage</h1>
+    <div class="muted"><a href="/engagements/{{ engagement.id }}">{{ engagement.customer_name }}</a></div>
+  </div>
+  <div class="actions">
+    {% if request.app.state.reply_detector %}
+      <form method="post" action="/engagements/{{ engagement.id }}/poll-replies" class="inline">
+        <button class="btn primary" type="submit">⟳ Poll Gmail for replies</button>
+      </form>
+    {% else %}
+      <span class="muted small" title="Set AUTOREACH_GMAIL_TOKEN_PATH, AUTOREACH_GMAIL_SENDER, GEMINI_API_KEY">
+        🛈 Reply detector disabled (Gmail or Gemini not configured)
+      </span>
+    {% endif %}
+  </div>
+  <nav class="filters">
+    <a href="/engagements/{{ engagement.id }}/replies" class="{{ 'active' if not filter_status else '' }}">All</a>
+    <a href="/engagements/{{ engagement.id }}/replies?status=pending" class="{{ 'active' if filter_status == 'pending' else '' }}">Pending</a>
+    <a href="/engagements/{{ engagement.id }}/replies?status=sent" class="{{ 'active' if filter_status == 'sent' else '' }}">Sent</a>
+    <a href="/engagements/{{ engagement.id }}/replies?status=discarded" class="{{ 'active' if filter_status == 'discarded' else '' }}">Discarded</a>
+  </nav>
+</section>
+
+{% set last_poll = request.app.state.last_poll_result %}
+{% if last_poll and last_poll.engagement_id == engagement.id %}
+<div class="notice">
+  <strong>Last Gmail poll:</strong>
+  scanned <strong>{{ last_poll.prospects_scanned }}</strong> prospects ·
+  polled <strong>{{ last_poll.threads_polled }}</strong> threads ·
+  recorded <strong>{{ last_poll.replies_recorded }}</strong> new replies ·
+  <strong>{{ last_poll.auto_responders }}</strong> auto-responders ·
+  skipped <strong>{{ last_poll.duplicates_skipped }}</strong> duplicates
+  {% if last_poll.fell_back_to_default %}· <span style="color: var(--warn)">{{ last_poll.fell_back_to_default }} fell back to default classification</span>{% endif %}
+  {% if last_poll.llm_cost_cents %}· cost <strong>{{ last_poll.llm_cost_cents|cents }}</strong>{% endif %}
+  {% if last_poll.token_invalid %}· <span style="color: var(--bad)"><strong>Gmail token invalid — reconnect required</strong></span>{% endif %}
+  {% if last_poll.errors %}<details><summary>{{ last_poll.errors|length }} error(s)</summary><ul>{% for e in last_poll.errors %}<li>{{ e }}</li>{% endfor %}</ul></details>{% endif %}
+</div>
+{% endif %}
+
+<section class="cards">
+  <div class="card">
+    <h3>Record an inbound reply</h3>
+    <p class="muted small">Use this until the Gmail reply-detector adapter is wired in Phase 3.</p>
+    <form method="post" action="/engagements/{{ engagement.id }}/replies" class="form">
+      <label>Prospect ID <input type="text" name="prospect_id" required placeholder="p_..." /></label>
+      <label>Snippet (the reply text) <textarea name="snippet" rows="3" required></textarea></label>
+      <label>Classification
+        <select name="classification">
+          <option value="objection">objection</option>
+          <option value="interested">interested</option>
+          <option value="unsubscribe">unsubscribe</option>
+          <option value="auto">auto</option>
+        </select>
+      </label>
+      <label>Suggested reply (your draft)<textarea name="suggested_reply" rows="3"></textarea></label>
+      <label>External msg id (optional, for idempotency) <input type="text" name="external_message_id" /></label>
+      <button class="btn primary" type="submit">Record reply</button>
+    </form>
+  </div>
+</section>
+
+{% if replies|length == 0 %}
+  <p class="muted">No replies match this filter.</p>
+{% endif %}
+
+{% for item in replies %}
+  {% set r = item.reply %}
+  {% set p = item.prospect %}
+  <article class="reply">
+    <header>
+      <span class="pill pill-{{ r.classification }}">{{ r.classification }}</span>
+      <span class="pill pill-{{ r.status }}">{{ r.status }}</span>
+      <strong>{{ p.email if p else r.prospect_id }}</strong>
+      {% if p and p.company %}<span class="muted">· {{ p.company }}</span>{% endif %}
+      <span class="muted small right">{{ r.received_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+    </header>
+    <blockquote class="snippet">{{ r.snippet }}</blockquote>
+
+    {% if r.status == "pending" %}
+      <form method="post" action="/replies/{{ r.id }}/draft" class="form">
+        <label>Suggested reply
+          <textarea name="suggested_reply" rows="4">{{ r.suggested_reply }}</textarea>
+        </label>
+        <button class="btn" type="submit">Save draft</button>
+      </form>
+      <div class="actions">
+        <form method="post" action="/replies/{{ r.id }}/send" class="inline">
+          <button class="btn primary" type="submit">Mark as sent</button>
+        </form>
+        <form method="post" action="/replies/{{ r.id }}/discard" class="inline">
+          <button class="btn danger" type="submit">Discard</button>
+        </form>
+
+        {% if r.classification == "interested" and engagement.booking_url %}
+          <a class="btn" href="/engagements/{{ engagement.id }}/meetings">Book meeting →</a>
+        {% endif %}
+      </div>
+    {% else %}
+      {% if r.suggested_reply %}
+        <p><strong>Reply sent:</strong></p>
+        <blockquote>{{ r.suggested_reply }}</blockquote>
+      {% endif %}
+    {% endif %}
+  </article>
+{% endfor %}
+
+{% endblock %}

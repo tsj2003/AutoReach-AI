@@ -1,0 +1,228 @@
+{
+  "project": "Attainly",
+  "branchName": "feat/signal-stack-e2e",
+  "description": "Loop-engineered completion: Phase 0 UI + Reputation/Evidence moat + pilot essentials. One story per iteration. No Instagram/WhatsApp/Facebook cold automation.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Actions List API controls on outbox jobs",
+      "description": "As an operator, I want Approve/Reject/Snooze/Rerun on pending jobs so that Outbox works as an Actions queue.",
+      "acceptanceCriteria": [
+        "Tenant-scoped endpoints or existing outbox routes support approve, reject, snooze (with until), and rerun-AI for a pending job",
+        "Guardian block-level risk cannot be bypassed by approve-without-edit when policy requires HITL",
+        "Unauthorized cross-tenant job access returns 404/403",
+        "Tests pass for happy path + tenant isolation + snooze",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reuse jobs/outbox as system of record. Do not create a parallel Actions table unless unavoidable."
+    },
+    {
+      "id": "US-002",
+      "title": "Actions List UI on Pending Approvals / Outbox",
+      "description": "As an operator, I want a clear Actions screen so I can clear the queue with verbs.",
+      "acceptanceCriteria": [
+        "Outbox/Pending Approvals shows action rows: contact, company, campaign, type, short reason, status",
+        "Buttons: Approve, Reject, Snooze, Edit, Rerun AI (wired to US-001)",
+        "Loading, empty, and error states exist",
+        "Verify in browser or dashboard build succeeds with smoke navigation",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Depends on US-001."
+    },
+    {
+      "id": "US-003",
+      "title": "Reasoning panel API fields on job + prospect",
+      "description": "As an operator, I want evidence, guardian risk, and trace id returned on job/prospect payloads so the UI can show why.",
+      "acceptanceCriteria": [
+        "Job/outbox detail includes signal_stack evidence, guardian score/issues/fixes, openinference_trace_id when present",
+        "Prospect/contact detail includes stack score + evidence list",
+        "Tenant-scoped; tests cover presence after 2-signal simulate + plan",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Data may already exist — expose consistently in API responses."
+    },
+    {
+      "id": "US-004",
+      "title": "Reasoning panel UI on Outbox + Prospect",
+      "description": "As a founder demoing, I want to SEE stack evidence, Guardian fixes, and trace id without using curl.",
+      "acceptanceCriteria": [
+        "Outbox/Action detail shows evidence citations, guardian score + issues/fixes, trace id",
+        "Prospect view shows stack evidence + score",
+        "HITL reason shown when forced by Guardian block",
+        "dashboard build passes",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Depends on US-003. Completes Phase 0.4."
+    },
+    {
+      "id": "US-005",
+      "title": "Campaign UI for min_signal_stack + simulate signals",
+      "description": "As a demo operator, I want to set min_signal_stack and simulate signals from the UI with an honest label.",
+      "acceptanceCriteria": [
+        "Campaign create/edit exposes min_signal_stack control",
+        "Campaign detail has Simulate signals control labeled as demo/ingest (not fake live radar)",
+        "1 signal with min=2 creates no prospect; 2 distinct signals creates prospect (UI path)",
+        "Tests or e2e smoke covers API; UI build passes",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Phase 0.5 demo polish."
+    },
+    {
+      "id": "US-006",
+      "title": "LLM unavailable honest banner on template fallback",
+      "description": "As an operator, I want a clear banner when drafts fall back to templates so the demo is not misleading.",
+      "acceptanceCriteria": [
+        "When personalizer uses template fallback, job/UI surfaces source=template or equivalent honest label",
+        "When LLM succeeds with evidence, draft path does not show template banner",
+        "Tests pass for both paths (mocked LLM)",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Founder has API keys; still handle quota failure honestly."
+    },
+    {
+      "id": "US-007",
+      "title": "Hard evidence gate before dispatch",
+      "description": "As a domain owner, I want stacked campaigns to refuse dispatch without fresh evidence so we do not send ungrounded AI spam.",
+      "acceptanceCriteria": [
+        "When campaign min_signal_stack >= 2, dispatch/plan fails closed or forces HITL block if evidence missing/stale",
+        "Guardian receives grounding terms from evidence when present",
+        "Tests cover: with evidence allowed path; without evidence blocked/forced HITL",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "MOAT: evidence-gated sending. Build on Signal Stack E2E already on branch."
+    },
+    {
+      "id": "US-008",
+      "title": "Reputation snapshot service per mailbox",
+      "description": "As an operator, I want a reputation snapshot (health, bounce proxy, sends today, pause reason) so reputation is a first-class asset.",
+      "acceptanceCriteria": [
+        "Service or endpoint returns per-mailbox: health status, emails_sent_today, bounce-related signals available, pause/unsafe reason",
+        "Tenant-scoped; unhealthy mailbox excluded from smart dispatch (no regression)",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "MOAT: Reputation OS foundation. Reuse mailbox_health + bounce_detector."
+    },
+    {
+      "id": "US-009",
+      "title": "Reputation dashboard UI",
+      "description": "As an operator/agency, I want a Reputation page so I can see which mailboxes are safe before scaling.",
+      "acceptanceCriteria": [
+        "Dashboard page or Operations section lists mailboxes with health, sends today, risk badges",
+        "Unsafe/paused mailboxes visually distinct",
+        "Empty/loading/error states",
+        "dashboard build passes",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Depends on US-008."
+    },
+    {
+      "id": "US-010",
+      "title": "Agency proof pack includes deliverability health",
+      "description": "As an agency operator, I want proof packages to include deliverability/reputation summary plus COGS/meetings so clients trust results.",
+      "acceptanceCriteria": [
+        "Proof/ROI package endpoint includes mailbox health summary + meetings + COGS/margin + trace ids",
+        "Tenant-scoped; no cross-tenant leakage",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "MOAT: agency proof. Extend existing proof package if present."
+    },
+    {
+      "id": "US-011",
+      "title": "Reply Brain next-action drafts",
+      "description": "As an operator, I want inbound replies classified into next Actions (positive, OOO, postpone, unsubscribe, meeting cancel) with drafts.",
+      "acceptanceCriteria": [
+        "Classifier paths create/update an Action/job with type + draft + reason for at least: positive, ooo, unsubscribe",
+        "Actions appear in Actions List (US-002)",
+        "HITL by default",
+        "Tests pass for classification → action creation",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Phase 1.1 — after Phase 0 UI stories."
+    },
+    {
+      "id": "US-012",
+      "title": "Tenant knowledge block injection",
+      "description": "As a tenant admin, I want a knowledge block used in personalization so drafts follow our offer/voice.",
+      "acceptanceCriteria": [
+        "API to create/update a tenant-scoped knowledge string/block",
+        "Personalizer receives knowledge when present",
+        "Tests pass with knowledge influencing prompt/input (mock LLM ok)",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "MVP of fine-tuning/knowledge. Keep small."
+    },
+    {
+      "id": "US-013",
+      "title": "Scoped Autopilot toggle on campaign",
+      "description": "As an operator, I want an explicit campaign Autopilot toggle (default off) so autonomy is never silent.",
+      "acceptanceCriteria": [
+        "Campaign has autopilot boolean default false stored + returned by API",
+        "When autopilot false, sends require approval",
+        "When autopilot true, eligible jobs may auto-send EXCEPT Guardian block which always forces HITL",
+        "UI toggle present; honest copy about risk",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Clarify/replace silent 50-send trust ramp behavior in docs + code path."
+    },
+    {
+      "id": "US-014",
+      "title": "Campaign soft-stop and hard-stop",
+      "description": "As an operator, I want soft-stop and hard-stop so I can halt outreach safely.",
+      "acceptanceCriteria": [
+        "Soft-stop: no new sequences; document in-flight behavior",
+        "Hard-stop: no further sends for campaign jobs",
+        "API + UI controls",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Phase 2.1"
+    },
+    {
+      "id": "US-015",
+      "title": "Docs truth table + Phase 0 PR notes",
+      "description": "As a founder, I want honest docs of Real vs Simulate vs Prototype so we never overclaim.",
+      "acceptanceCriteria": [
+        "docs/SIGNAL_STACK_AND_MOAT_STATUS.md exists with Real/Partial/Prototype labels",
+        "States simulate-only ingestion honestly",
+        "States no cold IG/WA/FB",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Final loop story before PR ask."
+    }
+  ]
+}

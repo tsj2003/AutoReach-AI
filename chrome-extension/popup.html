@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Attainly LinkedIn Connector</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icon.png" alt="Attainly" width="28" height="28" />
+      <div>
+        <strong>Attainly</strong>
+        <span>LinkedIn connector</span>
+      </div>
+    </header>
+    <p class="lede">
+      Stay signed into LinkedIn in this Chrome profile. Paste the pairing token from
+      Attainly → Integrations. No password is sent.
+    </p>
+    <label>
+      Pairing token
+      <input id="token" type="text" autocomplete="off" placeholder="ATN-XXXX-XXXX" />
+    </label>
+    <label>
+      Attainly URL
+      <input
+        id="apiBase"
+        type="url"
+        autocomplete="off"
+        placeholder="https://your-attainly-host"
+      />
+    </label>
+    <button id="connect" type="button">Connect this LinkedIn session</button>
+    <p id="status" class="status" role="status"></p>
+    <ol class="steps">
+      <li>In Attainly, open Integrations → LinkedIn → Extension, then Generate token.</li>
+      <li>Sign into LinkedIn in this same Chrome profile.</li>
+      <li>Paste the token here and connect. Cookies are Fernet-encrypted on the server.</li>
+    </ol>
+    <script src="popup.js"></script>
+  </body>
+</html>

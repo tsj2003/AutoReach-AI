@@ -1,0 +1,46 @@
+{% extends "_base.html" %}
+{% block title %}Engagements · AutoReach Cockpit{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Engagements</h1>
+  <a class="btn primary" href="/engagements/new">+ new engagement</a>
+</section>
+
+{% if rows|length == 0 %}
+  <p class="muted">No engagements yet. Create one to get started.</p>
+{% else %}
+<table class="data">
+  <thead>
+    <tr>
+      <th>Customer</th>
+      <th>Status</th>
+      <th class="num">Booked</th>
+      <th class="num">Qualified</th>
+      <th class="num">Revenue</th>
+      <th class="num">Cost</th>
+      <th class="num">Margin</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    {% set e = row.engagement %}
+    {% set r = row.report %}
+    <tr>
+      <td>
+        <a href="/engagements/{{ e.id }}"><strong>{{ e.customer_name }}</strong></a>
+        <div class="muted small">{{ e.id }}</div>
+      </td>
+      <td><span class="pill pill-{{ e.status }}">{{ e.status }}</span></td>
+      <td class="num">{{ r.booked_count if r else 0 }}</td>
+      <td class="num">{{ r.qualified_count if r else 0 }}</td>
+      <td class="num">{{ (r.revenue_cents if r else 0)|cents }}</td>
+      <td class="num">{{ (r.cost_cents if r else 0)|cents }}</td>
+      <td class="num">{{ (r.margin_cents if r else 0)|cents }}</td>
+      <td><a href="/engagements/{{ e.id }}">open →</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

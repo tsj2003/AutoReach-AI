@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoReach - Cold Outreach Cockpit</title>
+    <meta name="description" content="Manage your AI-powered cold email campaigns. Inbox rotation, reply detection, and deliverability defense.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚀%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['DM Serif Display', 'serif']
+                    },
+                    colors: {
+                        darkBg: '#0A0A0A',
+                        glassBg: 'rgba(17, 17, 17, 0.65)',
+                        mint: '#10B981',
+                        emerald: {
+                            50: '#EEF0FD',
+                            100: '#DDE1FB',
+                            200: '#BCC5F7',
+                            300: '#9BA8F4',
+                            400: '#7B8CF0',
+                            500: '#10B981',
+                            600: '#3A52F1',
+                            700: '#1936ED',
+                            800: '#0E23B8',
+                            900: '#0A1882',
+                            950: '#050C41'
+                        },
+                        coral: '#F43F5E',
+                        honey: '#F59E0B'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body {
+            background-color: #0A0A0A;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(244, 63, 94, 0.08) 0%, transparent 40%);
+        }
+        .glass-panel {
+            background: rgba(17, 17, 17, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .soft-panel {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .field {
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 16px;
+            padding: 12px 14px;
+            outline: none;
+            color: #f1f5f9;
+            transition: all 0.2s;
+        }
+        .field:focus {
+            border-color: #10B981;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-radius: 16px;
+            min-height: 44px;
+            padding: 0 18px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .step-dot {
+            display: flex;
+            height: 32px;
+            width: 32px;
+            flex: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #f1f5f9;
+            color: #0A0A0A;
+            font-size: 13px;
+            font-weight: 800;
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans text-slate-100 antialiased" x-data="app()" x-init="init()">
+    <div class="mx-auto flex min-h-screen w-full max-w-[1440px]">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="hidden w-72 shrink-0 border-r border-white/5 px-6 py-6 lg:flex flex-col justify-between">
+            <div>
+                <!-- Brand logo -->
+                <div class="mb-8 flex items-center gap-3">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-[0_0_15px_rgba(16, 185, 129,0.4)]">
+                        <i data-lucide="send" class="h-5 w-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-base font-extrabold tracking-tight">AutoReach-AI</p>
+                        <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">SaaS cockpit</p>
+                    </div>
+                </div>
+
+                <!-- Tabs navigation -->
+                <nav class="space-y-1">
+                    <template x-for="tab in tabs" :key="tab.id">
+                        <button @click="setTab(tab.id)"
+                                :class="currentTab === tab.id ? 'bg-white/10 text-white font-semibold' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
+                                class="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm transition">
+                            <i :data-lucide="tab.icon" class="h-4.5 w-4.5"></i>
+                            <span class="capitalize" x-text="tab.id"></span>
+                        </button>
+                    </template>
+                </nav>
+            </div>
+
+            <!-- Bottom sidebar profile state -->
+            <div>
+                <!-- Active Campaign Status card -->
+                <div class="glass-panel rounded-2xl p-4 mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Outreach Status</span>
+                        <span :class="status.process_running ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16, 185, 129,0.5)]' : 'bg-slate-600'" class="h-2 w-2 rounded-full animate-pulse"></span>
+                    </div>
+                    <p class="text-lg font-extrabold" x-text="status.process_running ? 'Active Engine' : 'Idle'"></p>
+                    <p class="text-xs text-slate-400 mt-1" x-text="config.auth_status || 'Checking Google...'"></p>
+                </div>
+
+                <!-- User Profile & Log out -->
+                <div class="flex items-center justify-between border-t border-white/5 pt-4">
+                    <div class="flex items-center gap-2">
+                        <div class="h-8 w-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center font-bold text-emerald-400 text-xs">
+                            U
+                        </div>
+                        <span class="text-xs font-semibold text-slate-300">SaaS User</span>
+                    </div>
+                    <a href="/logout" @click="if (userId) { Object.keys(localStorage).filter(key => key.startsWith('autoreach_u_' + userId + '_')).forEach(key => localStorage.removeItem(key)); }" class="text-slate-400 hover:text-rose-400 transition" title="Log out">
+                        <i data-lucide="log-out" class="h-4.5 w-4.5"></i>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 px-4 py-6 sm:px-8 lg:px-10 overflow-y-auto">
+            
+            <!-- Warning Banner for paused_no_active_inbox -->
+            <div x-show="status.status === 'paused_no_active_inbox'" x-cloak class="mb-6 p-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-200 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-2xl flex items-center justify-center bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                        <i data-lucide="alert-octagon" class="h-5 w-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-extrabold flex items-center gap-1.5 text-rose-300">
+                            Campaign Paused: Inbox Shield Quarantined
+                        </p>
+                        <p class="text-xs text-rose-400/90 mt-0.5">
+                            All connected email accounts have encountered authentication errors (e.g. revoked tokens or password changes). Please reconnect healthy sending addresses in the <span class="font-bold underline cursor-pointer" @click="setTab('auth')">Inbox Shield tab</span> to resume outreach.
+                        </p>
+                    </div>
+                </div>
+                <button @click="setTab('auth')" class="icon-btn bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs px-4 py-2 min-h-0 h-9 transition duration-200 transform hover:scale-[1.04] active:scale-[0.97]">
+                    Manage Inboxes
+                </button>
+            </div>
+            
+            <!-- SaaS Banner / Upgrade Options -->
+            <div class="mb-6 flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border bg-gradient-to-r"
+                 :class="status.user_tier === 'pro' ? 'from-emerald-950/40 to-slate-900 border-emerald-500/20' : (status.user_tier === 'basic' ? 'from-indigo-950/40 to-slate-900 border-indigo-500/20' : 'from-slate-900 to-slate-950 border-white/5')">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-2xl flex items-center justify-center border"
+                         :class="status.user_tier === 'pro' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (status.user_tier === 'basic' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-slate-800 text-slate-400 border-white/10')">
+                        <i :data-lucide="status.user_tier === 'pro' ? 'sparkles' : 'shield'" class="h-5 w-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-extrabold flex items-center gap-1.5">
+                            Account Tier: <span class="uppercase text-xs font-bold px-2 py-0.5 rounded-full"
+                                                 :class="status.user_tier === 'pro' ? 'bg-emerald-500/20 text-emerald-400' : (status.user_tier === 'basic' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-slate-800 text-slate-400')"
+                                                 x-text="status.user_tier || 'free'"></span>
+                        </p>
+                        <p class="text-xs text-slate-400 mt-0.5" x-text="status.user_tier === 'pro' ? 'Full access unlocked including Gemini AI personalization.' : 'Upgrade to Pro to customize messages with Gemini.'"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <!-- Billing upgrade trigger -->
+                    <button x-show="status.user_tier !== 'pro'" @click="upgradePlan('pro')" class="icon-btn bg-emerald-500 hover:bg-emerald-400 text-white font-bold transition duration-200 transform hover:scale-[1.04] active:scale-[0.97] text-xs px-4 py-2 min-h-0 h-9 hover:shadow-[0_0_20px_rgba(16, 185, 129,0.4)]">
+                        Upgrade to Pro
+                    </button>
+                    <!-- Developer simulation bypass -->
+                    <button @click="simulateSandboxUpgrade()" class="icon-btn border border-white/10 hover:bg-white/5 text-slate-300 text-xs px-4 py-2 min-h-0 h-9" title="Developer simulation mode: instant upgrade for testing">
+                        Simulate Pro
+                    </button>
+                </div>
+            </div>
+
+            <!-- Header Controls: Campaign switcher & Start Engine -->
+            <header class="mb-6 flex flex-col gap-4 rounded-3xl bg-slate-900/60 border border-white/5 p-5 lg:flex-row lg:items-center lg:justify-between">
+                <!-- Campaign switcher drop down -->
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Active Campaign</label>
+                        <select x-model="activeCampaignId" @change="switchCampaign($event.target.value)" class="field bg-slate-950 text-sm font-semibold border-white/10 min-w-56 py-2 px-3">
+                            <template x-for="c in campaigns" :key="c.id">
+                                <option :value="c.id" x-text="c.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="flex gap-2 self-end sm:self-center mt-2 sm:mt-4">
+                        <button @click="promptNewCampaign()" class="icon-btn border border-white/10 hover:bg-white/5 text-slate-300 text-xs px-3 py-2 min-h-0 h-9" title="Create new campaign">
+                            <i data-lucide="plus" class="h-4 w-4"></i> New Campaign
+                        </button>
+                        <button @click="deleteCampaign()" class="icon-btn border border-rose-500/20 hover:bg-rose-500/10 text-rose-400 text-xs px-3 py-2 min-h-0 h-9" title="Delete current campaign">
+                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Launch Button -->
+                <div class="flex flex-wrap gap-2">
+                    <button x-show="!status.process_running" @click="startCampaign()" class="icon-btn glowing-btn bg-emerald-500 hover:bg-emerald-400 text-white font-bold transition duration-200 transform hover:scale-[1.04] active:scale-[0.97] hover:shadow-[0_0_32px_rgba(16, 185, 129,0.6)]">
+                        <i data-lucide="play" class="h-4.5 w-4.5"></i>Start Campaign
+                    </button>
+                    <button x-show="status.process_running" @click="stopCampaign()" class="icon-btn bg-rose-500 hover:bg-rose-400 text-slate-100">
+                        <i data-lucide="pause" class="h-4.5 w-4.5"></i>Pause Campaign
+                    </button>
+                </div>
+            </header>
+
+            <!-- Metrics Overview row -->
+            <div class="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-5">
+                <div class="glass-panel rounded-2xl p-5">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Leads</p>
+                    <p class="mt-2 text-3xl font-extrabold" x-text="formatNumber(status.total_contacts)"></p>
+                </div>
+                <div class="glass-panel rounded-2xl p-5">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Successfully Sent</p>
+                    <p class="mt-2 text-3xl font-extrabold text-emerald-400" x-text="formatNumber(status.emails_sent)"></p>
+                </div>
+                <div class="glass-panel rounded-2xl p-5">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Remaining Queue</p>
+                    <p class="mt-2 text-3xl font-extrabold" x-text="formatNumber(status.remaining)"></p>
+                </div>
+                <div class="glass-panel rounded-2xl p-5">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Failures / Bounces</p>
+                    <p class="mt-2 text-3xl font-extrabold text-rose-400" x-text="formatNumber(status.emails_failed)"></p>
+                </div>
+                <div class="glass-panel rounded-2xl p-5">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Replies Detected</p>
+                    <p class="mt-2 text-3xl font-extrabold text-amber-400" x-text="formatNumber(stepMetrics.replied || 0)"></p>
+                </div>
+            </div>
+
+            <!-- Tab screens toggling -->
+            
+            <!-- Dashboard overview tab -->
+            <section x-show="currentTab === 'dashboard'" x-cloak>
+                <div class="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
+                    <!-- Left: Progress Panel -->
+                    <div class="glass-panel rounded-[30px] p-6">
+                        <div class="mb-5 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-xl font-serif font-extrabold">Campaign Delivery Progress</h3>
+                                <p class="text-xs text-slate-400 mt-1">Status: <span class="capitalize font-semibold text-emerald-400" x-text="status.status || 'stopped'"></span></p>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="h-3 overflow-hidden rounded-full bg-slate-800 border border-white/5">
+                            <div class="h-full rounded-full bg-emerald-500 transition-all duration-500" :style="`width: ${status.progress_percent || 0}%`"></div>
+                        </div>
+                        <div class="mt-1.5 flex justify-between text-[10px] font-bold text-slate-400">
+                            <span x-text="`${status.progress_percent || 0}% Complete`"></span>
+                            <span x-text="`${status.emails_sent || 0} / ${status.total_contacts || 0} Emails`"></span>
+                        </div>
+
+                        <!-- Info details grid -->
+                        <div class="mt-6 grid gap-3 grid-cols-3">
+                            <div class="soft-panel rounded-xl p-4">
+                                <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Index Pointer</p>
+                                <p class="text-lg font-bold mt-1" x-text="status.resume_point || 0"></p>
+                            </div>
+                            <div class="soft-panel rounded-xl p-4">
+                                <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Batch Limit</p>
+                                <p class="text-lg font-bold mt-1" x-text="`${status.batch_size || 0} / day`"></p>
+                            </div>
+                            <div class="soft-panel rounded-xl p-4">
+                                <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Delay Sleep</p>
+                                <p class="text-lg font-bold mt-1" x-text="`${status.sleep_min}-${status.sleep_max}s`"></p>
+                            </div>
+                        </div>
+
+                        <!-- Step guidance buttons -->
+                        <div class="mt-6 grid gap-3 sm:grid-cols-4">
+                            <button @click="setTab('auth')" class="rounded-2xl border border-white/5 bg-white/25 hover:bg-white/5 p-4 text-left transition">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Step 1</span>
+                                <p class="mt-1 font-bold text-sm">Auth APIs</p>
+                            </button>
+                            <button @click="setTab('contacts')" class="rounded-2xl border border-white/5 bg-white/25 hover:bg-white/5 p-4 text-left transition">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Step 2</span>
+                                <p class="mt-1 font-bold text-sm">Leads CSV</p>
+                            </button>
+                            <button @click="setTab('templates')" class="rounded-2xl border border-white/5 bg-white/25 hover:bg-white/5 p-4 text-left transition">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Step 3</span>
+                                <p class="mt-1 font-bold text-sm">Write Studio</p>
+                            </button>
+                            <button @click="startCampaign()" class="rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold p-4 text-left transition duration-200 transform hover:scale-[1.04] active:scale-[0.97] hover:shadow-[0_0_20px_rgba(16, 185, 129,0.4)]">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-white/70">Step 4</span>
+                                <p class="mt-1 font-bold text-sm">Send Outreach</p>
+                            </button>
+                        </div>
+
+                        <!-- Sequence Funnel Breakdown -->
+                        <div class="mt-6 border-t border-white/5 pt-6">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+                                <i data-lucide="split" class="h-4 w-4 text-emerald-400"></i> Sequence Funnel Breakdown
+                            </h4>
+                            <div class="relative flex flex-col gap-3">
+                                <template x-for="(s, index) in steps" :key="s.id">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:border-emerald-500/30 transition">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 font-extrabold border border-emerald-500/20" x-text="index + 1"></div>
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold truncate" x-text="s.subject_template || 'No Subject'"></p>
+                                                <p class="text-[10px] text-slate-400 mt-0.5" x-text="index === 0 ? 'Sends immediately' : `Sent after ${s.delay_days} days delay`"></p>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2 font-mono text-[9px] font-bold">
+                                            <span class="px-2 py-1 rounded bg-slate-800 text-slate-300" x-text="`Pending: ${stepMetrics['step_' + (index + 1) + '_pending'] || 0}`"></span>
+                                            <span class="px-2 py-1 rounded bg-emerald-950/40 text-emerald-400" x-text="`Sent: ${stepMetrics['step_' + (index + 1) + '_sent'] || 0}`"></span>
+                                            <span class="px-2 py-1 rounded bg-amber-950/40 text-amber-400" x-text="`Replied: ${stepMetrics['step_' + (index + 1) + '_replied'] || 0}`"></span>
+                                            <span class="px-2 py-1 rounded bg-slate-800 text-slate-400" x-text="`Done: ${stepMetrics['step_' + (index + 1) + '_completed'] || 0}`"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="!steps.length" class="text-xs text-slate-500 text-center py-4">No sequence steps defined. Go to Content Studio to build your sequence steps.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Terminal Output -->
+                    <div class="glass-panel rounded-[30px] p-6 flex flex-col">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-lg font-extrabold flex items-center gap-2">
+                                <i data-lucide="terminal" class="h-4.5 w-4.5 text-emerald-400"></i> Active Logs Terminal
+                            </h3>
+                            <button @click="refreshLogs()" class="rounded-full border border-white/10 px-3 py-1.5 text-[10px] font-bold hover:bg-white/5">Refresh</button>
+                        </div>
+                        <div id="logContainer" class="flex-1 min-h-[220px] max-h-[260px] overflow-y-auto rounded-2xl bg-[#030712] p-4 font-mono text-[11px] leading-5 border border-white/5">
+                            <template x-for="log in logs">
+                                <p class="mb-1" :class="{ 'text-emerald-400': log.type === 'success', 'text-rose-400': log.type === 'error', 'text-amber-400': log.type === 'warning', 'text-slate-400': log.type === 'info' }">
+                                    <span class="text-slate-600">&gt;</span> <span x-text="log.raw"></span>
+                                </p>
+                            </template>
+                            <p x-show="!logs.length" class="text-slate-600">Waiting for campaign events log output...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Inbox Reply & Objection Queue Card -->
+                <div class="mt-6 glass-panel rounded-[30px] p-6">
+                    <div class="mb-5 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-xl font-extrabold flex items-center gap-2">
+                                <i data-lucide="message-square" class="h-5 w-5 text-emerald-400"></i> AI Objection Handler & Reply Queue
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-1">Review, edit, and send objection-handling and interest replies drafted automatically by Gemini.</p>
+                        </div>
+                        <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full" 
+                              x-text="`${replyDrafts.length} Pending`" x-show="replyDrafts.length"></span>
+                    </div>
+
+                    <div class="space-y-4">
+                        <template x-for="(draft, index) in replyDrafts" :key="draft.id">
+                            <div class="p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-emerald-500/20 transition flex flex-col gap-4">
+                                <!-- Top info row -->
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="text-sm font-bold text-slate-100" x-text="draft.contact_name || 'Prospect'"></span>
+                                            <span class="text-xs text-slate-400 font-mono" x-text="`<${draft.contact_email}>`"></span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-400 mt-0.5" x-text="`Campaign: ${draft.campaign_name}`"></p>
+                                    </div>
+                                    <div class="flex items-center gap-2 font-mono text-[9px] font-bold">
+                                        <!-- Intent tag -->
+                                        <span class="px-2.5 py-1 rounded-full uppercase"
+                                              :class="{
+                                                  'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': draft.classification === 'interested',
+                                                  'bg-amber-500/10 text-amber-400 border border-amber-500/20': draft.classification === 'objection',
+                                                  'bg-rose-500/10 text-rose-400 border border-rose-500/20': draft.classification === 'unsubscribe'
+                                              }"
+                                              x-text="draft.classification"></span>
+                                        <span class="text-[10px] text-slate-500" x-text="new Date(draft.created_at).toLocaleDateString()"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Incoming message snippet -->
+                                <div class="bg-[#090D16] p-4 rounded-xl border border-white/5">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Incoming Reply Snippet</p>
+                                    <p class="text-xs text-slate-300 italic leading-relaxed" x-text="`“${draft.reply_snippet}”`"></p>
+                                </div>
+
+                                <!-- Editable Suggested Reply -->
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">AI Suggested Objection-Handling Response</p>
+                                    <textarea x-model="draft.suggested_reply" @input="localStorage.setItem(userId ? 'autoreach_u_' + userId + '_draft_' + draft.id : 'autoreach_draft_edit_' + draft.id, draft.suggested_reply)" rows="4" class="field font-sans text-xs leading-relaxed" placeholder="Type custom reply..."></textarea>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="flex justify-end gap-3 pt-2">
+                                    <button @click="discardReplyDraft(draft.id, index)" class="icon-btn rounded-xl text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 min-h-[38px] border border-white/5">
+                                        <i data-lucide="trash-2" class="h-4 w-4"></i> Dismiss Draft
+                                    </button>
+                                    <button @click="saveReplyDraft(draft.id, index)" class="icon-btn rounded-xl text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 min-h-[38px] border border-white/5">
+                                        <i data-lucide="save" class="h-4 w-4"></i> Save Draft
+                                    </button>
+                                    <button @click="sendReplyDraft(draft.id, index)" class="icon-btn rounded-xl text-xs bg-emerald-500 hover:bg-emerald-400 text-white font-bold min-h-[38px] transition duration-200 transform hover:scale-[1.04] active:scale-[0.97]">
+                                        <i data-lucide="send" class="h-4 w-4"></i> Send Reply
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Empty state -->
+                        <div x-show="!replyDrafts.length" class="text-center py-10">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 mx-auto mb-3 border border-emerald-500/20">
+                                <i data-lucide="check-circle" class="h-5 w-5"></i>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-200">Inbox is completely clear</h4>
+                            <p class="text-xs text-slate-500 mt-1">No pending prospect replies. You're all caught up! ✨</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Contacts Tab: Leads Ingestion -->
+            <section x-show="currentTab === 'contacts'" x-cloak>
+                <div class="mb-6">
+                    <h3 class="text-2xl font-serif font-extrabold">Lead List Ingestion</h3>
+                    <p class="text-xs text-slate-400 mt-1">Upload recipient spreadsheets. AutoReach parses matching email rows and filters duplicates automatically.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_.8fr]">
+                    <label class="glass-panel flex min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-[30px] border-dashed border-2 border-white/10 p-8 text-center transition hover:bg-white/5">
+                        <input type="file" id="fileUpload" class="hidden" accept=".csv,.txt" @change="handleFileUpload($event)">
+                        <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <i data-lucide="upload-cloud" class="h-7 w-7"></i>
+                        </div>
+                        <h4 class="text-lg font-extrabold">Import spreadsheet contacts file</h4>
+                        <p class="mt-2 max-w-sm text-xs text-slate-400 leading-normal">Requires a column with 'email' header format. Invalid rows will be filtered out to optimize success.</p>
+                        <p x-show="pipeline.filename" class="mt-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold text-emerald-400">Uploaded: <span x-text="pipeline.filename"></span></p>
+                        <span class="mt-5 rounded-2xl bg-white text-slate-950 px-5 py-2 text-xs font-bold glowing-btn transition duration-200 transform hover:scale-[1.04] active:scale-[0.97] hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]">Select File</span>
+                    </label>
+
+                    <div class="glass-panel rounded-[30px] p-6 flex flex-col justify-between">
+                        <div>
+                            <h4 class="mb-4 text-base font-extrabold">Pipeline Data Output</h4>
+                            <div class="space-y-2.5">
+                                <div class="soft-panel flex items-center justify-between rounded-xl p-3.5"><span class="text-xs text-slate-400">Total Rows Found</span><span class="font-mono font-bold text-sm" x-text="pipeline.raw_count">0</span></div>
+                                <div class="soft-panel flex items-center justify-between rounded-xl p-3.5"><span class="text-xs text-slate-400">Duplicates Filtered</span><span class="font-mono font-bold text-amber-400 text-sm" x-text="pipeline.dupes">0</span></div>
+                                <div class="soft-panel flex items-center justify-between rounded-xl p-3.5"><span class="text-xs text-slate-400">Invalid Emails Ignored</span><span class="font-mono font-bold text-rose-400 text-sm" x-text="pipeline.invalid">0</span></div>
+                                <div class="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5"><span class="text-xs font-bold text-emerald-400">Imported Successfully</span><span class="font-mono text-lg font-extrabold text-emerald-400" x-text="pipeline.ready">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leads Directory Section -->
+                <div class="glass-panel rounded-[30px] p-6 mt-6" x-show="contactsList.length > 0">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                        <div>
+                            <h4 class="text-lg font-extrabold text-slate-200">Imported Leads Directory</h4>
+                            <p class="text-xs text-slate-400 mt-1">Review parsed columns, status, and custom variables extracted for personalization.</p>
+                        </div>
+                        <div class="relative w-full sm:w-72">
+                            <input type="text" x-model="searchQuery" @input="currentPage = 1" placeholder="Search email, name, company..." class="field py-2.5 pl-10 text-xs" style="border-radius: 12px;">
+                            <div class="absolute left-3.5 top-3.5 text-slate-500">
+                                <i data-lucide="search" class="h-4 w-4"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leads Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="border-b border-white/5 text-slate-400 font-bold uppercase tracking-wider">
+                                    <th class="pb-3 px-4">Recipient</th>
+                                    <th class="pb-3 px-4">Company</th>
+                                    <th class="pb-3 px-4">Status</th>
+                                    <th class="pb-3 px-4">Sequence Step</th>
+                                    <th class="pb-3 px-4 text-right">Extracted Variables</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="contact in paginatedContacts()" :key="contact.id">
+                                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                                        <td class="py-3 px-4">
+                                            <div class="font-bold text-slate-200" x-text="`${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'No Name'"></div>
+                                            <div class="text-[10px] text-slate-500 font-mono" x-text="contact.email"></div>
+                                        </td>
+                                        <td class="py-3 px-4 text-slate-300" x-text="contact.company || '—'"></td>
+                                        <td class="py-3 px-4">
+                                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold"
+                                                  :class="{
+                                                      'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25': contact.status === 'sent' || contact.status === 'completed',
+                                                      'bg-rose-500/10 text-coral border border-rose-500/25': contact.status === 'failed',
+                                                      'bg-honey/10 text-honey border border-honey/25': contact.status === 'replied',
+                                                      'bg-slate-500/10 text-slate-400 border border-slate-500/25': contact.status === 'pending',
+                                                      'bg-sky-500/10 text-sky-400 border border-sky-500/25': contact.status === 'unsubscribed'
+                                                  }">
+                                                <span class="h-1.5 w-1.5 rounded-full"
+                                                      :class="{
+                                                          'bg-emerald-400': contact.status === 'sent' || contact.status === 'completed',
+                                                          'bg-coral': contact.status === 'failed',
+                                                          'bg-honey': contact.status === 'replied',
+                                                          'bg-slate-400': contact.status === 'pending',
+                                                          'bg-sky-400': contact.status === 'unsubscribed'
+                                                      }"></span>
+                                                <span x-text="contact.status"></span>
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/5 border border-white/10 text-[10px] font-bold text-slate-300" x-text="`S${contact.current_step}`"></span>
+                                        </td>
+                                        <td class="py-3 px-4 text-right">
+                                            <button @click="selectedContactId = (selectedContactId === contact.id ? null : contact.id)" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition underline underline-offset-4">
+                                                <span x-text="selectedContactId === contact.id ? 'Hide Variables' : 'Inspect Variables'"></span>
+                                            </button>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Collapsible Variables Drawer -->
+                                    <tr x-show="selectedContactId === contact.id" x-cloak class="bg-white/[0.01]">
+                                        <td colspan="5" class="py-4 px-6 border-b border-white/5">
+                                            <div class="soft-panel rounded-2xl p-4 text-left">
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <span class="text-xs font-bold text-slate-300">Extracted CSV Field Mappings (JSON)</span>
+                                                    <span class="text-[10px] text-slate-500 font-mono" x-text="`Contact ID: ${contact.id}`"></span>
+                                                </div>
+                                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                                    <template x-for="(val, key) in contact.raw_variables" :key="key">
+                                                        <div class="bg-white/5 rounded-xl p-2.5 border border-white/[0.05] flex items-center justify-between gap-3 overflow-hidden">
+                                                            {% raw %}<span class="text-[11px] font-mono text-slate-400 shrink-0" x-text="`{{ ${key} }}`"></span>{% endraw %}
+                                                            <span class="text-xs font-bold text-slate-200 truncate" :title="val" x-text="val || '—'"></span>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                                <div x-show="!contact.raw_variables || Object.keys(contact.raw_variables).length === 0" class="text-xs text-slate-500 italic py-2">
+                                                    No additional custom variables found for this contact.
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    <div class="flex items-center justify-between border-t border-white/5 mt-4 pt-4 text-xs">
+                        <span class="text-slate-400 font-medium" x-text="`Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, filteredContacts().length)} of ${filteredContacts().length} leads`"></span>
+                        <div class="flex items-center gap-2">
+                            <button @click="currentPage > 1 ? currentPage-- : null" :disabled="currentPage === 1" class="soft-panel flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition">
+                                <i data-lucide="chevron-left" class="h-4 w-4"></i>
+                            </button>
+                            <span class="text-slate-300 font-bold" x-text="`Page ${currentPage} of ${totalPages()}`"></span>
+                            <button @click="currentPage < totalPages() ? currentPage++ : null" :disabled="currentPage === totalPages()" class="soft-panel flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition">
+                                <i data-lucide="chevron-right" class="h-4 w-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Templates Tab: Content Studio -->
+            <section x-show="currentTab === 'templates'" x-cloak>
+                <div class="mb-6">
+                    <h3 class="text-2xl font-serif font-extrabold">Content Studio</h3>
+                    <p class="text-xs text-slate-400 mt-1">Design multi-step email drip sequences. Add sequential steps, specify delay intervals, and write customized email subject/body templates.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1.1fr_1.9fr]">
+                    <div class="space-y-6">
+                        <!-- Sender profile parameters -->
+                        <div class="glass-panel rounded-[30px] p-6">
+                            <h4 class="text-base font-extrabold mb-4 flex items-center gap-2">
+                                <i data-lucide="user-cog" class="h-4.5 w-4.5 text-emerald-400"></i> Sender Sign-off Profile
+                            </h4>
+                            <div class="space-y-3">
+                                <input type="text" x-model="senderProfile.name" class="field text-xs" placeholder="Full name (e.g. Priya Sharma)">
+                                <input type="text" x-model="senderProfile.title" class="field text-xs" placeholder="Job title / tagline">
+                                <input type="text" x-model="senderProfile.company" class="field text-xs" placeholder="Sender company / college">
+                                <input type="text" x-model="senderProfile.phone" class="field text-xs" placeholder="Phone contact, optional">
+                                <input type="url" x-model="senderProfile.linkedin" class="field text-xs" placeholder="LinkedIn URL">
+                                <input type="url" x-model="senderProfile.github" class="field text-xs" placeholder="GitHub URL">
+                                <input type="url" x-model="senderProfile.website" class="field text-xs" placeholder="Portfolio website URL">
+                                <textarea x-model="senderProfile.links" rows="3" class="field font-mono text-[11px]" placeholder="Extra Links (one per line)"></textarea>
+                                <textarea x-model="senderProfile.signature" rows="3" class="field font-mono text-[11px]" placeholder="Best,\n{{ sender_name }}"></textarea>
+                                <button @click="saveSettings()" class="icon-btn w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs transition duration-200 transform hover:scale-[1.04] active:scale-[0.97]"><i data-lucide="check" class="h-4 w-4"></i>Save Profile Data</button>
+                            </div>
+                        </div>
+
+                        <!-- Sequence Steps Manager -->
+                        <div class="glass-panel rounded-[30px] p-6">
+                            <div class="mb-4 flex items-center justify-between">
+                                <h4 class="text-base font-extrabold flex items-center gap-2">
+                                    <i data-lucide="list-ordered" class="h-4.5 w-4.5 text-emerald-400"></i> Drip Sequence Steps
+                                </h4>
+                                <button @click="addStep()" class="icon-btn border border-emerald-500/20 hover:bg-emerald-500/10 text-emerald-400 text-xs px-2.5 py-1.5 min-h-0 h-8">
+                                    <i data-lucide="plus" class="h-3.5 w-3.5"></i> Add Step
+                                </button>
+                            </div>
+                            <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                <template x-for="(s, index) in steps" :key="s.id">
+                                    <div class="p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-3"
+                                         :class="selectedStepId === s.id ? 'border-emerald-500 bg-emerald-500/5' : 'border-white/5 bg-white/5 hover:bg-white/10'"
+                                         @click="selectStep(s)">
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-xs font-bold truncate" x-text="`Step ${s.step_number}: ${s.subject_template || '(no subject)'}`"></p>
+                                            <p class="text-[10px] text-slate-400 mt-0.5" x-text="s.step_number === 1 ? 'Sends immediately (0 day delay)' : `Wait ${s.delay_days} days after previous step`"></p>
+                                        </div>
+                                        <button @click.stop="deleteStep(s.id)" class="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition" title="Delete Step">
+                                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <div x-show="!steps.length" class="text-xs text-slate-500 text-center py-6">No sequence steps defined. Add a step to get started.</div>
+                            </div>
+                        </div>
+
+                        <!-- Attachments and options -->
+                        <div class="glass-panel rounded-[30px] p-6">
+                            <h4 class="text-base font-extrabold mb-4">Campaign Options</h4>
+                            <!-- Attachment upload -->
+                            <div class="rounded-2xl bg-white/5 border border-white/5 p-4">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-xs font-bold">Campaign File Attachment</p>
+                                        <p class="text-[10px] text-slate-400">Attach PDF proposals, resumes, or brochures.</p>
+                                    </div>
+                                    <i data-lucide="paperclip" class="h-4.5 w-4.5 text-emerald-400"></i>
+                                </div>
+                                <input type="file" id="templateAttachmentUpload" class="hidden" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" @change="handleAttachmentUpload($event)">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button @click="document.getElementById('templateAttachmentUpload').click()" class="icon-btn border border-white/10 hover:bg-white/5 text-xs px-3 py-1.5 min-h-0 h-9"><i data-lucide="upload" class="h-3.5 w-3.5"></i>Upload</button>
+                                    <span x-show="settings.attachment" class="text-[10px] font-bold text-emerald-400 truncate max-w-40" x-text="settings.attachment.split('/').pop()"></span>
+                                    <button x-show="settings.attachment" @click="settings.attachment = ''; saveSettings()" class="text-slate-400 hover:text-slate-200 text-[10px]">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Editor for Selected Step -->
+                    <div class="glass-panel rounded-[30px] p-6 space-y-4">
+                        <template x-if="selectedStepId">
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between pb-3 border-b border-white/5">
+                                    <h4 class="text-base font-extrabold" x-text="`Editing Step ${selectedStep.step_number}`"></h4>
+                                    <div class="flex items-center gap-2.5">
+                                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Delay</label>
+                                        <input type="number" min="0" max="60" x-model.number="selectedStep.delay_days" 
+                                               :disabled="selectedStep.step_number === 1"
+                                               class="field py-1.5 px-2.5 text-xs w-16 text-center disabled:opacity-50 disabled:cursor-not-allowed bg-slate-900 border-white/10 rounded-xl"
+                                               placeholder="Days">
+                                        <span class="text-[10px] text-slate-400 font-semibold" x-text="selectedStep.step_number === 1 ? 'days (immediate)' : 'days delay'"></span>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Email Subject Template</label>
+                                    <input type="text" x-model="selectedStep.subject_template" class="field text-sm rounded-xl">
+                                </div>
+                                <div class="grid gap-4 lg:grid-cols-2">
+                                    <div>
+                                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Plain Text Template Body</label>
+                                        <textarea x-model="selectedStep.text_template" rows="18" class="field font-mono text-[11px] leading-relaxed rounded-xl"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">HTML Template (Optional)</label>
+                                        <textarea x-model="selectedStep.html_template" rows="18" class="field font-mono text-[11px] leading-relaxed rounded-xl" placeholder="<p>Write raw HTML parameters...</p>"></textarea>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex justify-end gap-3 pt-2">
+                                    <div class="flex gap-2 mr-auto">
+                                        <button @click="usePreset('job')" class="rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-[10px] font-bold hover:bg-white/10 transition">Job Preset</button>
+                                        <button @click="usePreset('sales')" class="rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-[10px] font-bold hover:bg-white/10 transition">Sales Preset</button>
+                                    </div>
+                                    <button @click="saveSelectedStep()" class="icon-btn bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs transition duration-200 transform hover:scale-[1.04] active:scale-[0.97]">
+                                        <i data-lucide="save" class="h-4 w-4"></i> Save Step Templates
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!selectedStepId">
+                            <div class="h-[450px] flex flex-col items-center justify-center text-center p-8">
+                                <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-800 border border-white/5 text-slate-400">
+                                    <i data-lucide="file-text" class="h-7 w-7"></i>
+                                </div>
+                                <h4 class="text-base font-extrabold">No Step Selected</h4>
+                                <p class="mt-2 max-w-sm text-xs text-slate-400 leading-normal">
+                                    Select a sequence step from the list on the left, or click "+ Add Step" to build your campaign drip sequence stages.
+                                </p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Auth & API configuration tab -->
+            <section x-show="currentTab === 'auth'" x-cloak>
+                <div class="mb-6">
+                    <h3 class="text-2xl font-serif font-extrabold">APIs & Integrations Configuration</h3>
+                    <p class="text-xs text-slate-400 mt-1">Configure Gmail OAuth scopes and Gemini AI model API keys securely.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
+                    <div class="glass-panel rounded-[30px] p-6 flex flex-col justify-between">
+                        <div>
+                            <h4 class="text-base font-extrabold mb-4 flex items-center justify-between">
+                                <span>Google OAuth Gmail Sign In</span>
+                                <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full" x-text="config.auth_status"></span>
+                            </h4>
+                            <p class="text-xs text-slate-400 leading-relaxed mb-6">
+                                AutoReach uses the official Google Gmail APIs to authenticate sending commands. Click connect below to authorize Gmail sending permission securely through Google's single sign-on system.
+                            </p>
+                            
+                            <div class="space-y-4">
+                                <div class="soft-panel flex gap-3.5 rounded-2xl p-4">
+                                    <span class="step-dot font-extrabold">1</span>
+                                    <div>
+                                        <p class="text-xs font-extrabold">Official Gmail Redirect authorization</p>
+                                        <p class="text-[11px] text-slate-400 mt-0.5">Authorize Gmail sending scopes to permit the server to send bulk drafts directly from your mailbox.</p>
+                                    </div>
+                                </div>
+                                <div class="soft-panel flex gap-3.5 rounded-2xl p-4">
+                                    <span class="step-dot font-extrabold">2</span>
+                                    <div>
+                                        <p class="text-xs font-extrabold">Unlimited background jobs</p>
+                                        <p class="text-[11px] text-slate-400 mt-0.5">Campaign worker threads maintain execution even while your laptop browser is closed.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 flex flex-wrap gap-3">
+                            <!-- Auth button triggers /api/auth/google redirect -->
+                            <a href="/api/auth/google" class="icon-btn bg-emerald-500 hover:bg-emerald-400 text-white font-bold transition duration-200 transform hover:scale-[1.04] active:scale-[0.97] hover:shadow-[0_0_20px_rgba(16, 185, 129,0.4)]">
+                                <i data-lucide="log-in" class="h-4 w-4"></i>
+                                <span x-text="config.token_ready ? 'Reconnect Gmail' : 'Connect Gmail Account'"></span>
+                            </a>
+                        </div>
+
+                        <!-- Connected Inboxes List -->
+                        <div class="mt-8 pt-6 border-t border-white/5">
+                            <h5 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+                                <i data-lucide="shield" class="h-4 w-4 text-emerald-400"></i> Connected Inboxes (Inbox Shield)
+                            </h5>
+                            <div class="space-y-3">
+                                <template x-for="token in config.tokens" :key="token.id">
+                                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:border-emerald-500/30 transition">
+                                        <div class="flex-1 min-w-0 pr-3">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="text-xs font-bold truncate text-slate-100" x-text="token.email"></span>
+                                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                                                      :class="token.status === 'reauth_required' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : (token.active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border border-slate-500/20')"
+                                                      x-text="token.status === 'reauth_required' ? 'Quarantined (Reauth Required)' : (token.active ? 'Active' : 'Inactive')"></span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <div class="flex justify-between text-[10px] text-slate-400 font-bold mb-1">
+                                                    <span>Daily Limit Progress</span>
+                                                    <span x-text="`${token.daily_sent_count} / 50 sent`"></span>
+                                                </div>
+                                                <div class="h-2 overflow-hidden rounded-full bg-slate-800 border border-white/5">
+                                                    <div class="h-full rounded-full bg-emerald-500 transition-all duration-300" :style="`width: ${Math.min((token.daily_sent_count / 50) * 100, 100)}%`"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button @click="disconnectInbox(token.id)" class="text-xs text-rose-400 hover:text-rose-300 font-semibold px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/10 hover:border-rose-500/20 transition shrink-0">
+                                            Disconnect
+                                        </button>
+                                    </div>
+                                </template>
+                                <div x-show="!config.tokens || !config.tokens.length" class="text-xs text-slate-500 text-center py-4">
+                                    No email inboxes connected. Connect your Google account to start sending campaigns.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Gemini AI settings -->
+                    <div class="glass-panel rounded-[30px] p-6 space-y-4">
+                        <h4 class="text-base font-extrabold flex items-center justify-between">
+                            <span>Gemini AI Pro Personalization</span>
+                            <span class="text-[10px] font-bold uppercase border px-2 py-0.5 rounded-full"
+                                  :class="settings.personalize_enabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-white/10'"
+                                  x-text="settings.personalize_enabled ? 'Enabled' : 'Disabled'"></span>
+                        </h4>
+                        
+                        <div class="space-y-4">
+                            <label class="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-4 cursor-pointer hover:bg-white/10 transition">
+                                <span>
+                                    <b class="text-xs">Generic Template Sending</b><br>
+                                    <span class="text-[11px] text-slate-400">Sends unmodified Jinja templates. Available for all tiers.</span>
+                                </span>
+                                <input type="radio" name="personalization_toggle" :checked="!settings.personalize_enabled" @change="settings.personalize_enabled = false; saveSettings()">
+                            </label>
+                            
+                            <label class="flex items-center justify-between rounded-2xl border bg-emerald-500/5 p-4 cursor-pointer hover:bg-emerald-500/10 transition"
+                                   :class="status.user_tier === 'pro' ? 'border-emerald-500/20' : 'border-white/5 opacity-50'">
+                                <span>
+                                    <b class="text-xs text-emerald-400">Gemini AI Personalization (PRO Only)</b><br>
+                                    <span class="text-[11px] text-slate-300">Generates unique subjects/bodies matching sheet contexts.</span>
+                                </span>
+                                <input type="radio" name="personalization_toggle" :disabled="status.user_tier !== 'pro'" :checked="settings.personalize_enabled" @change="settings.personalize_enabled = true; saveSettings()">
+                            </label>
+                        </div>
+
+                        <!-- Gemini form inputs -->
+                        <div class="space-y-3.5 pt-2">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gemini API Key</label>
+                                <input type="password" x-model="settings.gemini_api_key" class="field text-xs" placeholder="AI Studio Key (Defaults to Server Key)">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gemini LLM Model</label>
+                                <input type="text" x-model="settings.personalization_model" class="field text-xs">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Custom Rewriting Prompt Instructions</label>
+                                <textarea x-model="settings.personalization_prompt" rows="3.5" class="field font-mono text-[11px]"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Send settings adjustments -->
+                        <div class="grid grid-cols-3 gap-2.5 pt-2">
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Batch Limit</label>
+                                <input type="number" x-model="settings.batch_size" class="field text-xs">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Min Sleep</label>
+                                <input type="number" x-model="settings.sleep_min" class="field text-xs">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Max Sleep</label>
+                                <input type="number" x-model="settings.sleep_max" class="field text-xs">
+                            </div>
+                        </div>
+
+                        <button @click="saveSettings()" class="icon-btn w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs transition duration-200 transform hover:scale-[1.04] active:scale-[0.97] hover:shadow-[0_0_20px_rgba(16, 185, 129,0.4)]"><i data-lucide="settings" class="h-4 w-4"></i>Save Settings</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Toast alert -->
+            <div x-show="toast.show" x-transition
+                 class="fixed bottom-6 right-6 z-50 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl glass-panel border-emerald-500/20 text-emerald-400">
+                <span x-text="toast.message"></span>
+            </div>
+        </main>
+    </div>
+
+    <!-- Alpine App State -->
+    <script>
+        function app() {
+            return {
+                tabs: [
+                    { id: 'dashboard', icon: 'layout-dashboard' },
+                    { id: 'contacts', icon: 'users' },
+                    { id: 'templates', icon: 'file-pen-line' },
+                    { id: 'auth', icon: 'shield-check' },
+                ],
+                currentTab: 'dashboard',
+                campaigns: [],
+                activeCampaignId: null,
+                status: {},
+                config: {},
+                logs: [],
+                pipeline: { raw_count: 0, dupes: 0, invalid: 0, ready: 0, filename: '', rejected_samples: [] },
+                template: { subject: '', text: '', html: '' },
+                senderProfile: { name: '', title: '', company: '', phone: '', website: '', linkedin: '', github: '', links: '', signature: 'Best,\\n{{ sender_name }}' },
+                settings: { batch_size: 100, sleep_min: 180, sleep_max: 240, personalize_enabled: false, personalization_model: 'gemini-2.0-flash', personalization_prompt: '', gemini_api_key: '', sender: '', attachment: '' },
+                toast: { show: false, message: '' },
+                steps: [],
+                selectedStepId: null,
+                selectedStep: { id: null, step_number: 1, subject_template: '', text_template: '', html_template: '', delay_days: 3 },
+                stepMetrics: {},
+                contactsList: [],
+                replyDrafts: [],
+                userId: null,
+                searchQuery: '',
+                currentPage: 1,
+                pageSize: 10,
+                selectedContactId: null,
+
+                async init() {
+                    // Check URL for Google OAuth or Stripe success params
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('auth') === 'success') {
+                        this.showToast('Gmail connected successfully!');
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                    if (urlParams.get('payment') === 'success') {
+                        this.showToast('Billing tier upgraded to Pro! Thank you.');
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+
+                    await this.loadCampaigns();
+                    await this.loadReplyDrafts();
+                    if (this.activeCampaignId) {
+                        await Promise.all([
+                            this.refreshStatus(),
+                            this.refreshConfig(),
+                            this.refreshLogs(),
+                            this.loadSteps(),
+                            this.loadContactsAndMetrics()
+                        ]);
+                    }
+                    
+                    // Live Polling every 4 seconds
+                    setInterval(() => {
+                        this.loadReplyDrafts();
+                        if (this.activeCampaignId) {
+                            this.refreshStatus();
+                            this.refreshLogs();
+                            this.loadContactsAndMetrics();
+                        }
+                    }, 4000);
+                    
+                    this.renderIcons();
+                },
+
+                setTab(tab) {
+                    this.currentTab = tab;
+                    this.$nextTick(() => this.renderIcons());
+                },
+
+                renderIcons() {
+                    if (window.lucide) window.lucide.createIcons();
+                },
+
+                formatNumber(value) {
+                    return Number(value || 0).toLocaleString();
+                },
+
+                filteredContacts() {
+                    if (!this.searchQuery) return this.contactsList;
+                    const query = this.searchQuery.toLowerCase();
+                    return this.contactsList.filter(c => 
+                        (c.email && c.email.toLowerCase().includes(query)) ||
+                        (c.first_name && c.first_name.toLowerCase().includes(query)) ||
+                        (c.last_name && c.last_name.toLowerCase().includes(query)) ||
+                        (c.company && c.company.toLowerCase().includes(query))
+                    );
+                },
+
+                paginatedContacts() {
+                    const start = (this.currentPage - 1) * this.pageSize;
+                    return this.filteredContacts().slice(start, start + this.pageSize);
+                },
+
+                totalPages() {
+                    return Math.ceil(this.filteredContacts().length / this.pageSize) || 1;
+                },
+
+                showToast(message) {
+                    this.toast = { show: true, message };
+                    setTimeout(() => { this.toast.show = false; }, 3200);
+                },
+
+                async loadCampaigns() {
+                    const res = await fetch('/api/campaigns');
+                    const data = await res.json();
+                    this.campaigns = data.campaigns || [];
+                    if (this.campaigns.length > 0 && !this.activeCampaignId) {
+                        this.activeCampaignId = this.campaigns[0].id;
+                    }
+                },
+
+                async switchCampaign(id) {
+                    this.activeCampaignId = parseInt(id);
+                    this.steps = [];
+                    this.selectedStepId = null;
+                    this.selectedStep = { id: null, step_number: 1, subject_template: '', text_template: '', html_template: '', delay_days: 3 };
+                    this.stepMetrics = {};
+                    this.contactsList = [];
+                    await Promise.all([
+                        this.refreshStatus(),
+                        this.refreshConfig(),
+                        this.refreshLogs(),
+                        this.loadSteps(),
+                        this.loadContactsAndMetrics()
+                    ]);
+                },
+
+                async promptNewCampaign() {
+                    const name = prompt("Enter a name for the new outreach campaign:");
+                    if (!name) return;
+                    const res = await fetch('/api/campaign/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Failed to create campaign');
+                    
+                    this.showToast(data.message);
+                    this.activeCampaignId = data.campaign_id;
+                    await this.loadCampaigns();
+                    await Promise.all([
+                        this.refreshStatus(),
+                        this.refreshConfig(),
+                        this.refreshLogs(),
+                        this.loadSteps(),
+                        this.loadContactsAndMetrics()
+                    ]);
+                },
+
+                async deleteCampaign() {
+                    if (!this.activeCampaignId) return;
+                    if (!confirm("Are you sure you want to delete the active campaign? All contacts and logs will be permanently removed.")) return;
+                    
+                    const res = await fetch(`/api/campaign/delete/${this.activeCampaignId}`, { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Failed to delete campaign');
+                    
+                    this.showToast(data.message);
+                    this.activeCampaignId = null;
+                    await this.loadCampaigns();
+                    if (this.activeCampaignId) {
+                        await Promise.all([
+                            this.refreshStatus(),
+                            this.refreshConfig(),
+                            this.refreshLogs(),
+                            this.loadSteps(),
+                            this.loadContactsAndMetrics()
+                        ]);
+                    } else {
+                        this.status = {};
+                        this.config = {};
+                        this.logs = [];
+                        this.steps = [];
+                        this.selectedStepId = null;
+                        this.selectedStep = { id: null, step_number: 1, subject_template: '', text_template: '', html_template: '', delay_days: 3 };
+                        this.stepMetrics = {};
+                        this.contactsList = [];
+                    }
+                },
+
+                async refreshStatus() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch(`/api/status?campaign_id=${this.activeCampaignId}`);
+                    this.status = await res.json();
+                    if (this.status.user_id) {
+                        this.userId = this.status.user_id;
+                    }
+                },
+
+                async refreshConfig() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch(`/api/config?campaign_id=${this.activeCampaignId}`);
+                    this.config = await res.json();
+                    if (this.config.user_id) {
+                        this.userId = this.config.user_id;
+                    }
+                    
+                    this.template.subject = this.config.subject;
+                    this.template.text = this.config.text_template;
+                    this.template.html = this.config.html_template;
+                    this.senderProfile = this.config.sender_profile || this.senderProfile;
+                    
+                    Object.assign(this.settings, {
+                        batch_size: this.config.batch_size,
+                        sleep_min: this.config.sleep_min,
+                        sleep_max: this.config.sleep_max,
+                        personalize_enabled: this.config.personalize_enabled,
+                        personalization_model: this.config.personalization_model,
+                        personalization_prompt: this.config.personalization_prompt || '',
+                        sender: this.config.sender,
+                        attachment: this.config.attachment,
+                    });
+                },
+
+                async refreshLogs() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch(`/api/logs?campaign_id=${this.activeCampaignId}&lines=60`);
+                    const data = await res.json();
+                    this.logs = data.logs || [];
+                    this.$nextTick(() => {
+                        const el = document.getElementById('logContainer');
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
+                },
+
+                async startCampaign() {
+                    if (!this.activeCampaignId) return;
+                    await this.saveSettings(false);
+                    const res = await fetch('/api/campaign/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ campaign_id: this.activeCampaignId })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Failed to start campaign');
+                    this.showToast(data.message);
+                    this.refreshStatus();
+                },
+
+                async stopCampaign() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch('/api/campaign/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ campaign_id: this.activeCampaignId })
+                    });
+                    const data = await res.json();
+                    this.showToast(data.message);
+                    this.refreshStatus();
+                },
+
+                async handleFileUpload(event) {
+                    if (!this.activeCampaignId) return;
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('campaign_id', this.activeCampaignId);
+                    
+                    const res = await fetch('/api/upload-contacts', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Upload failed');
+                    this.pipeline = data.stats;
+                    this.showToast(data.message);
+                    this.refreshStatus();
+                },
+
+                usePreset(kind) {
+                    const presets = {
+                        job: {
+                            subject: 'Quick note for {{ company }}',
+                            text: 'Hi {{ first_name or "there" }},\n\nI am {{ sender_name or "reaching out" }}{% if sender_title %}, {{ sender_title }}{% endif %}. I wanted to ask if {{ company or "your company" }} is open to relevant opportunities or conversations.\n\n{% if sender_linkedin or sender_github or sender_website or sender_links %}Links:\n{% if sender_linkedin %}- LinkedIn: {{ sender_linkedin }}\n{% endif %}{% if sender_github %}- GitHub: {{ sender_github }}\n{% endif %}{% if sender_website %}- Website: {{ sender_website }}\n{% endif %}{% if sender_links %}{{ sender_links }}\n{% endif %}\n{% endif %}I have attached my resume or supporting document for context.\n\n{{ sender_signature }}',
+                        },
+                        sales: {
+                            subject: 'Idea for {{ company }}',
+                            text: 'Hi {{ first_name or "there" }},\n\nI noticed {{ company or "your company" }} and wanted to share a quick idea that may help your team with your workflows.\n\nOpen to a short conversation this week?\n\n{% if sender_website or sender_links %}More context:\n{% if sender_website %}- {{ sender_website }}\n{% endif %}{% if sender_links %}{{ sender_links }}\n{% endif %}\n{% endif %}{{ sender_signature }}',
+                        }
+                    };
+                    if (this.selectedStepId && this.selectedStep) {
+                        this.selectedStep.subject_template = presets[kind].subject;
+                        this.selectedStep.text_template = presets[kind].text;
+                    } else {
+                        this.template.subject = presets[kind].subject;
+                        this.template.text = presets[kind].text;
+                    }
+                },
+
+                async loadSteps() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch(`/api/campaigns/${this.activeCampaignId}/steps`);
+                    const data = await res.json();
+                    this.steps = data.steps || [];
+                    if (this.steps.length > 0) {
+                        if (!this.selectedStepId || !this.steps.some(s => s.id === this.selectedStepId)) {
+                            this.selectStep(this.steps[0]);
+                        } else {
+                            const current = this.steps.find(s => s.id === this.selectedStepId);
+                            if (current) this.selectStep(current);
+                        }
+                    } else {
+                        this.selectedStepId = null;
+                        this.selectedStep = { id: null, step_number: 1, subject_template: '', text_template: '', html_template: '', delay_days: 3 };
+                    }
+                    this.renderIcons();
+                },
+
+                selectStep(s) {
+                    this.selectedStepId = s.id;
+                    this.selectedStep = JSON.parse(JSON.stringify(s));
+                    this.renderIcons();
+                },
+
+                async addStep() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch(`/api/campaigns/${this.activeCampaignId}/steps`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject_template: 'Follow up: {{ subject }}',
+                            text_template: 'Hi {{ first_name }},\n\nJust following up on my last email.\n\nBest,\n{{ sender_name }}',
+                            html_template: '',
+                            delay_days: 3
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Failed to add step');
+                    this.showToast('Sequence step added successfully');
+                    await this.loadSteps();
+                },
+
+                async deleteStep(stepId) {
+                    if (!this.activeCampaignId) return;
+                    if (!confirm('Are you sure you want to delete this sequence step?')) return;
+                    const res = await fetch(`/api/campaigns/${this.activeCampaignId}/steps/${stepId}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Failed to delete step');
+                    this.showToast('Sequence step deleted successfully');
+                    if (this.selectedStepId === stepId) {
+                        this.selectedStepId = null;
+                    }
+                    await this.loadSteps();
+                },
+
+                async saveSelectedStep() {
+                    if (!this.activeCampaignId || !this.selectedStepId) return;
+                    const res = await fetch(`/api/campaigns/${this.activeCampaignId}/steps/${this.selectedStepId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject_template: this.selectedStep.subject_template,
+                            text_template: this.selectedStep.text_template,
+                            html_template: this.selectedStep.html_template,
+                            delay_days: this.selectedStep.delay_days
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Failed to save step templates');
+                    this.showToast('Step templates saved successfully');
+                    await this.loadSteps();
+                },
+
+                async loadContactsAndMetrics() {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch(`/api/campaigns/${this.activeCampaignId}/contacts`);
+                    const data = await res.json();
+                    this.stepMetrics = data.metrics || {};
+                    this.contactsList = data.contacts || [];
+                },
+
+                async saveTemplate(show = true) {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch('/api/save-template', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: this.activeCampaignId,
+                            text: this.template.text,
+                            html: this.template.html,
+                            subject: this.template.subject
+                        })
+                    });
+                    if (!res.ok) return this.showToast('Template save failed');
+                    if (show) this.showToast('Outreach template saved successfully');
+                },
+
+                async handleAttachmentUpload(event) {
+                    if (!this.activeCampaignId) return;
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('campaign_id', this.activeCampaignId);
+                    
+                    const res = await fetch('/api/upload-attachment', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Attachment failed');
+                    this.settings.attachment = data.attachment;
+                    this.showToast(data.message);
+                    this.refreshConfig();
+                },
+
+                async saveSettings(show = true) {
+                    if (!this.activeCampaignId) return;
+                    const res = await fetch('/api/campaign/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: this.activeCampaignId,
+                            batch_size: this.settings.batch_size,
+                            sleep_min: this.settings.sleep_min,
+                            sleep_max: this.settings.sleep_max,
+                            subject: this.template.subject,
+                            attachment: this.settings.attachment,
+                            personalize_enabled: this.settings.personalize_enabled,
+                            personalization_model: this.settings.personalization_model,
+                            personalization_prompt: this.settings.personalization_prompt,
+                            gemini_api_key: this.settings.gemini_api_key,
+                            sender_profile: this.senderProfile
+                        })
+                    });
+                    if (!res.ok) return this.showToast('Settings update failed');
+                    if (show) this.showToast('Configuration settings updated successfully');
+                    this.refreshConfig();
+                },
+
+                async upgradePlan(tier) {
+                    const res = await fetch('/api/razorpay/create-order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tier })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) return this.showToast(data.error || 'Upgrade trigger failed');
+                    
+                    if (data.simulation) {
+                        window.location.href = data.url;
+                        return;
+                    }
+                    
+                    const options = {
+                        "key": data.key,
+                        "amount": data.amount,
+                        "currency": data.currency,
+                        "name": "AutoReach-AI",
+                        "description": "Pro Tier Subscription Upgrade",
+                        "order_id": data.order_id,
+                        "handler": async (response) => {
+                            const verifyRes = await fetch('/api/razorpay/verify-payment', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_signature: response.razorpay_signature,
+                                    tier: tier
+                                })
+                            });
+                            const verifyData = await verifyRes.json();
+                            if (verifyRes.ok) {
+                                this.showToast('Payment verified & account upgraded to Pro!');
+                                await Promise.all([this.refreshStatus(), this.refreshConfig()]);
+                            } else {
+                                this.showToast(verifyData.error || 'Payment verification failed');
+                            }
+                        },
+                        "prefill": {
+                            "email": data.user_email,
+                            "name": data.user_name
+                        },
+                        "theme": {
+                            "color": "#10B981"
+                        }
+                    };
+                    const rzp = new Razorpay(options);
+                    rzp.on('payment.failed', (response) => {
+                        this.showToast('Payment failed: ' + response.error.description);
+                    });
+                    rzp.open();
+                },
+
+                async simulateSandboxUpgrade() {
+                    const res = await fetch('/api/sandbox/upgrade', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tier: 'pro' })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        this.showToast(data.message);
+                        this.refreshStatus();
+                        this.refreshConfig();
+                    }
+                },
+
+                async loadReplyDrafts() {
+                    try {
+                        const res = await fetch('/api/reply-drafts');
+                        const data = await res.json();
+                        const drafts = data.drafts || [];
+                        
+                        // Rehydrate edited draft texts from localStorage
+                        drafts.forEach(d => {
+                            const key = this.userId ? `autoreach_u_${this.userId}_draft_${d.id}` : `autoreach_draft_edit_${d.id}`;
+                            const localEdit = localStorage.getItem(key);
+                            if (localEdit !== null) {
+                                d.suggested_reply = localEdit;
+                            }
+                        });
+                        this.replyDrafts = drafts;
+                    } catch (e) {
+                        console.error("Failed to load reply drafts:", e);
+                    }
+                },
+
+                async saveReplyDraft(draftId, index) {
+                    const draft = this.replyDrafts[index];
+                    if (!draft) return;
+                    try {
+                        const res = await fetch(`/api/reply-drafts/${draftId}/save`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ suggested_reply: draft.suggested_reply })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast('Reply draft saved successfully!');
+                        } else {
+                            this.showToast(data.error || 'Failed to save draft.');
+                        }
+                    } catch (e) {
+                        this.showToast('Network error while saving draft.');
+                    }
+                },
+
+                async sendReplyDraft(draftId, index) {
+                    const draft = this.replyDrafts[index];
+                    if (!draft) return;
+                    try {
+                        const res = await fetch(`/api/reply-drafts/${draftId}/send`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ reply_text: draft.suggested_reply })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast('AI Reply sent successfully!');
+                            const key = this.userId ? `autoreach_u_${this.userId}_draft_${draftId}` : `autoreach_draft_edit_${draftId}`;
+                            localStorage.removeItem(key);
+                            this.replyDrafts.splice(index, 1);
+                        } else {
+                            this.showToast(data.error || 'Failed to send reply.');
+                        }
+                    } catch (e) {
+                        this.showToast('Network error while sending reply.');
+                    }
+                },
+
+                async discardReplyDraft(draftId, index) {
+                    try {
+                        const res = await fetch(`/api/reply-drafts/${draftId}/discard`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast('Draft dismissed.');
+                            const key = this.userId ? `autoreach_u_${this.userId}_draft_${draftId}` : `autoreach_draft_edit_${draftId}`;
+                            localStorage.removeItem(key);
+                            this.replyDrafts.splice(index, 1);
+                        } else {
+                            this.showToast(data.error || 'Failed to discard draft.');
+                        }
+                    } catch (e) {
+                        this.showToast('Network error while discarding draft.');
+                    }
+                },
+
+                async disconnectInbox(tokenId) {
+                    if (!confirm("Are you sure you want to disconnect this email inbox?")) return;
+                    try {
+                        const res = await fetch(`/api/auth/tokens/${tokenId}/delete`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message || 'Inbox disconnected successfully.');
+                            await this.refreshConfig();
+                        } else {
+                            this.showToast(data.error || 'Failed to disconnect inbox.');
+                        }
+                    } catch (e) {
+                        this.showToast('Network error while disconnecting inbox.');
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>

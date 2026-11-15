@@ -1,0 +1,1 @@
+"""Attainly MCP server package."""

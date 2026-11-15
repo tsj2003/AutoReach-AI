@@ -1,0 +1,296 @@
+{
+  "project": "Attainly",
+  "branchName": "feat/goji-parity-moat",
+  "description": "Full Gojiberry feature parity on Attainly + Attainly's exceptional moat (evidence gate, deliverability/reputation OS, HITL proof). One story per loop iteration.",
+  "userStories": [
+    {
+      "id": "GP-001",
+      "title": "Website → Agent Config (Gojiberry Connect)",
+      "description": "As a founder, I paste my website and get ICP, offer, cure, signals, and first message drafts in minutes.",
+      "acceptanceCriteria": [
+        "Existing website intake works end-to-end in UI with editable review",
+        "Outputs: company, offer, ICP, client_cure, suggested signals, subject/body drafts",
+        "SSRF-safe fetch; honest fallback if LLM down",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Parity with Gojiberry 'Enter your website'. Prefer Firecrawl upgrade if quick."
+    },
+    {
+      "id": "GP-002",
+      "title": "Intent signal types catalog + matrix UI",
+      "description": "As an operator, I can choose buying/social signal types like competitor engagement, funding, job change, hiring, follows, topic activity.",
+      "acceptanceCriteria": [
+        "Documented catalog of supported signal types in API + UI multiselect",
+        "Campaign signal_matrix.allowed_signal_types enforced fail-closed when empty",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Gojiberry signal radar. Ingest can still be simulate/provider-backed."
+    },
+    {
+      "id": "GP-003",
+      "title": "ICP pre-filter before any outreach",
+      "description": "As an operator, non-ICP prospects never enter the send path.",
+      "acceptanceCriteria": [
+        "Prospects scored/filtered against campaign ICP description or structured ICP fields",
+        "Below-threshold ICP fit blocked from plan/dispatch",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Gojiberry 'only best prospects'."
+    },
+    {
+      "id": "GP-004",
+      "title": "Hybrid lead scoring (ICP + intent + freshness)",
+      "description": "As an operator, I see a 0-100 score combining ICP fit, signal strength, and freshness/decay.",
+      "acceptanceCriteria": [
+        "Score stored on prospect and returned by API",
+        "Decay or freshness reduces score for stale signals",
+        "UI shows score on prospect list",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Builds on Signal Stack score."
+    },
+    {
+      "id": "GP-005",
+      "title": "Lookalike audience from best customers",
+      "description": "As an operator, I can seed lookalikes from won/best accounts.",
+      "acceptanceCriteria": [
+        "API accepts seed companies/contacts and produces lookalike candidate list (provider or heuristic MVP)",
+        "Candidates still must pass ICP + signal gates before send",
+        "Honest Prototype label if provider missing",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Gojiberry lookalikes — gate through moat."
+    },
+    {
+      "id": "GP-006",
+      "title": "Signal-grounded AI copy (email)",
+      "description": "As an operator, every first-touch draft cites real signal evidence.",
+      "acceptanceCriteria": [
+        "Personalizer receives research/evidence",
+        "Stacked campaigns fail closed without evidence",
+        "UI shows evidence on draft",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Gojiberry personalization + Attainly grounding moat."
+    },
+    {
+      "id": "GP-007",
+      "title": "Agent-coordinated email cadence (no manual sequence builder required)",
+      "description": "As an operator, the agent proposes follow-up steps without forcing a complex sequence UI; optional simple cadence settings exist.",
+      "acceptanceCriteria": [
+        "First touch + 1-3 follow-ups can be generated as jobs with delays",
+        "Operator can approve cadence defaults per campaign",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Gojiberry 'no sequences to build' — keep simple + HITL."
+    },
+    {
+      "id": "GP-008",
+      "title": "Unified Inbox",
+      "description": "As an operator, all prospect email replies live in one Unibox with next actions.",
+      "acceptanceCriteria": [
+        "Inbox lists threads/replies tenant-scoped",
+        "Reply draft / next action visible",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Extend existing Inbox."
+    },
+    {
+      "id": "GP-009",
+      "title": "Full auto OR approve-before-send (Copilot + Autopilot)",
+      "description": "As an operator, I choose Copilot (approve) or Autopilot (auto) per campaign; Guardian block always forces HITL.",
+      "acceptanceCriteria": [
+        "Campaign mode: copilot | autopilot (default copilot)",
+        "Autopilot never bypasses Guardian block",
+        "UI toggle with clear risk copy",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Gojiberry control modes + Attainly safety."
+    },
+    {
+      "id": "GP-010",
+      "title": "Reply Brain — pre-written replies ready",
+      "description": "As an operator, when a prospect replies, a tailored next message is drafted for one-click approve.",
+      "acceptanceCriteria": [
+        "Classifications create Action with draft for positive, OOO, postpone, unsubscribe at minimum",
+        "Appears in Actions/Inbox",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Gojiberry replies feature."
+    },
+    {
+      "id": "GP-011",
+      "title": "Weekly learning + benchmarks report",
+      "description": "As an operator, I get a weekly insights report: what converted, which signals, recommendations.",
+      "acceptanceCriteria": [
+        "Endpoint or scheduled job produces weekly summary per tenant/campaign",
+        "Includes signal→reply/meeting attribution when data exists",
+        "UI page or Campaign insights panel",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Gojiberry 'gets better every week'. Industry benchmark can be honest placeholder if no industry data."
+    },
+    {
+      "id": "GP-012",
+      "title": "Email enrichment waterfall adapter",
+      "description": "As an operator, prospects can be enriched via a pluggable waterfall (15+ providers interface); works with 0-1 real providers + mocks.",
+      "acceptanceCriteria": [
+        "Enrichment adapter interface + at least one mock + optional real provider hook via env",
+        "Enrichment results stored on contact; failures don't crash campaign",
+        "Honest label when no provider key",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Gojiberry waterfall — architecture first."
+    },
+    {
+      "id": "GP-013",
+      "title": "CRM sync + API + MCP surface",
+      "description": "As an operator, I can sync outcomes to CRM via API/MCP with honest status.",
+      "acceptanceCriteria": [
+        "Public API docs or routes for campaigns/prospects/outcomes that are tenant-authenticated",
+        "MCP gateway either works with a real dependency path OR UI clearly says Prototype",
+        "Never fake 'synced' without success",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Gojiberry CRM/API/MCP."
+    },
+    {
+      "id": "GP-014",
+      "title": "LinkedIn/Social channel — research + assisted outreach (safe)",
+      "description": "As an operator, I can run LinkedIn/social as a second channel with safety limits OR export assisted steps — not reckless ban-bait automation.",
+      "acceptanceCriteria": [
+        "Channel model supports email + linkedin_social",
+        "MVP: either (A) generate LinkedIn message drafts + manual/send-assist checklist with daily caps, OR (B) integrate a compliant sender path if available",
+        "Cold WhatsApp/FB/IG DM blasting explicitly out of scope",
+        "Safety limits documented in UI",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Gojiberry socials — implement safely. Prefer drafts+HITL over banned scrapers."
+    },
+    {
+      "id": "GP-015",
+      "title": "MOAT: Deliverability Guardian hard pre-send",
+      "description": "As a domain owner, every send is scored for spam/AI-fingerprint risk; block forces HITL.",
+      "acceptanceCriteria": [
+        "Guardian runs on plan path; block forces approval",
+        "Issues + fixes visible in Actions UI",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Attainly exceptional moat — not in Gojiberry core."
+    },
+    {
+      "id": "GP-016",
+      "title": "MOAT: Evidence-gated dispatch",
+      "description": "As a domain owner, stacked campaigns cannot dispatch without fresh evidence.",
+      "acceptanceCriteria": [
+        "min_signal_stack >= 2 enforces evidence before send",
+        "Tests for allow/deny paths",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Attainly moat."
+    },
+    {
+      "id": "GP-017",
+      "title": "MOAT: Reputation OS dashboard",
+      "description": "As an operator/agency, I see mailbox reputation/health and pause reasons before scaling.",
+      "acceptanceCriteria": [
+        "Reputation snapshot API + UI",
+        "Unhealthy mailboxes excluded from smart dispatch",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Attainly moat."
+    },
+    {
+      "id": "GP-018",
+      "title": "MOAT: Proof pack (meetings + COGS + health + traces)",
+      "description": "As an agency, I can export/show proof: cost, meetings, margin, deliverability, trace ids.",
+      "acceptanceCriteria": [
+        "Proof endpoint tenant-scoped with those fields",
+        "UI access from campaign/dashboard",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Attainly moat — beats Gojiberry on trust/ROI proof."
+    },
+    {
+      "id": "GP-019",
+      "title": "Actions List as operator OS",
+      "description": "As an operator, one Actions inbox is the daily cockpit (approve/reject/snooze/edit/rerun) with reasoning panel.",
+      "acceptanceCriteria": [
+        "Actions UI complete with reasoning (evidence, guardian, trace)",
+        "Tests pass",
+        "dashboard build passes",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "FirstQuadrant execution OS + Gojiberry control."
+    },
+    {
+      "id": "GP-020",
+      "title": "Exceptional positioning docs + demo script",
+      "description": "As a founder, docs state Gojiberry parity features + Attainly moat without overclaims.",
+      "acceptanceCriteria": [
+        "docs/ATTAINLY_VS_GOJIBERRY.md exists with feature matrix Real/Partial/Prototype",
+        "Demo script: website → signals → evidence draft → guardian → approve → send → reply → proof",
+        "No fake customer counts",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Final story."
+    }
+  ]
+}

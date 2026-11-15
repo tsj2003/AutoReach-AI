@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}AutoReach Cockpit{% endblock %}</title>
+  <link rel="stylesheet" href="/static/cockpit.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/engagements">AutoReach Cockpit</a>
+    <nav>
+      {% if request.app.state.email_adapter_info.kind == "gmail" %}
+        {% if request.app.state.email_adapter_info.token_invalid %}
+          <span class="adapter-pill adapter-bad" title="Reconnect Google account">⚠ Gmail token invalid</span>
+          <a class="btn small" href="/oauth/google/start">Reconnect</a>
+        {% elif request.app.state.email_adapter_info.dry_run %}
+          <span class="adapter-pill adapter-warn" title="Sends are simulated; no real emails">🛈 Gmail · DRY-RUN</span>
+        {% else %}
+          <span class="adapter-pill adapter-good" title="{{ request.app.state.email_adapter_info.sender }}">✓ Gmail · LIVE</span>
+        {% endif %}
+      {% else %}
+        <span class="adapter-pill adapter-warn" title="No real emails are being sent">🛈 Console adapter (dev)</span>
+        {% if not request.app.state.email_adapter_info.token_path %}
+          <a class="btn small" href="/oauth/google/start" title="Connect your Gmail account">Connect Gmail</a>
+        {% endif %}
+      {% endif %}
+      <a href="/engagements">Engagements</a>
+    </nav>
+  </header>
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <small>AutoReach engine · phase 2 · operator console</small>
+  </footer>
+</body>
+</html>

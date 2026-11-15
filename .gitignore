@@ -1,0 +1,102 @@
+# ─────────────────────────────────────────────────────────────
+# Secrets — never commit these
+# ─────────────────────────────────────────────────────────────
+credentials.json
+token.json
+token.*.json
+*.token.json
+.env
+.env.*
+!.env.example
+
+# OAuth / API keys (defense in depth)
+**/secrets/
+**/private/
+
+# ─────────────────────────────────────────────────────────────
+# Personal / customer data — never commit
+# ─────────────────────────────────────────────────────────────
+*.csv
+*.xlsx
+*.pdf
+out/
+sent_emails.txt
+failed_emails.csv
+hr_emails.csv
+qualcomm_projects.txt
+HR Reachout List.xlsx
+Tarandeep_Resume_SDE.pdf
+
+# ─────────────────────────────────────────────────────────────
+# Local databases
+# ─────────────────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+autoreach_saas.db
+*.db.stale-*
+
+# ─────────────────────────────────────────────────────────────
+# Runtime artifacts
+# ─────────────────────────────────────────────────────────────
+*.log
+nohup_*.out
+nohup.out
+campaign.log
+campaign_screen.log
+server.log
+log.txt
+.campaign_state.json
+
+# ─────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ─────────────────────────────────────────────────────────────
+# Virtual environments
+# ─────────────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+
+# ─────────────────────────────────────────────────────────────
+# Build artifacts
+# ─────────────────────────────────────────────────────────────
+landing-page/dist/
+landing-page/node_modules/
+dashboard/node_modules/
+dashboard/dist/
+node_modules/
+dist/
+build/
+dashboard/playwright-report/
+dashboard/test-results/
+tmp/
+
+# ─────────────────────────────────────────────────────────────
+# IDE / OS
+# ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────────────────────────────────────
+# Docker volumes
+# ─────────────────────────────────────────────────────────────
+pg_data/
+redis_data/
+token_gmail.json
+token*.json
+
+# Azure onboarding sessions can contain deployment metadata and secret refs.
+.copilot-azure/

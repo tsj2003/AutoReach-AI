@@ -1,0 +1,5 @@
+name: autoreach-ai
+infra:
+  path: infra
+metadata:
+  template: autoreach-azure-container-apps

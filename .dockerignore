@@ -1,0 +1,87 @@
+# Git and local editor state
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Azure/local deployment session state
+.copilot-azure
+.do
+.ralph
+
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+credentials.json
+token.json
+token*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local databases and runtime data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.duckdb
+*.duckdb.wal
+pg_data
+redis_data
+tmp
+
+# Python caches and local envs
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.venv
+venv
+env
+
+# Node dependencies and generated frontend output
+node_modules
+dashboard/node_modules
+landing-page/node_modules
+dashboard/playwright-report
+dashboard/test-results
+dashboard/dist
+landing-page/dist
+
+# Test, report, and temporary artifacts
+coverage
+.coverage
+htmlcov
+playwright-report
+test-results
+dist
+build
+tmp_test.db*
+
+# Logs and local operator artifacts
+*.log
+nohup_*.out
+nohup.out
+campaign.log
+campaign_screen.log
+server.log
+log.txt
+.campaign_state.json
+send_log.csv
+newlit.csv
+
+# Personal/local documents that should never enter the image
+*.pdf
+*.doc
+*.docx
+*.pages

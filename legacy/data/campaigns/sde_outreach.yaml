@@ -1,0 +1,38 @@
+name: SDE Outreach Campaign
+status: pending
+
+email_settings:
+  template_text: templates/tsj_outreach.txt.j2
+  template_html: templates/tsj_outreach.html.j2
+  subject: "SDE 2026 | VIT CSE | IIT Bombay Intern"
+  from_email: "tarandeepsinghjuneja@gmail.com"
+  from_name: "Tarandeep Singh Juneja"
+  attachment: "Tarandeep_Resume_SDE.pdf"
+
+data:
+  source: "out/hr_reachout_list.csv"
+  total_contacts: 3499
+  emails_sent: 0
+  emails_failed: 0
+  resume_point: 0
+
+sending_params:
+  batch_size: 450
+  sleep_min: 90
+  sleep_max: 150
+  daily_limit: 500
+  limit: null
+
+timeline:
+  created: 2026-02-14T00:00:00
+  started: null
+  paused: null
+  resumed: null
+  completed: null
+  estimated_completion: null
+
+logs:
+  process_id: null
+  nohup_file: null
+  last_checked: null
+  error_count: 0

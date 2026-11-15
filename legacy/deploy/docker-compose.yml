@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql://autoreach:autoreach@postgres:5432/autoreach
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+
+  worker:
+    build: .
+    command: celery -A celery_worker.celery worker --loglevel=info --concurrency=2 -Q campaigns,maintenance
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql://autoreach:autoreach@postgres:5432/autoreach
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+
+  beat:
+    build: .
+    command: celery -A celery_worker.celery beat --loglevel=info
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql://autoreach:autoreach@postgres:5432/autoreach
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: autoreach
+      POSTGRES_PASSWORD: autoreach
+      POSTGRES_DB: autoreach
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  redis_data:
+  pg_data:
