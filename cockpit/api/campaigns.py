@@ -255,7 +255,10 @@ def list_campaigns(
     store=Depends(get_store),
     pnl=Depends(get_pnl),
 ):
-    engagements = list(store.list_engagements(tenant_id=current_user.tenant_id))
+    engagements = [
+        e for e in store.list_engagements(tenant_id=current_user.tenant_id)
+        if e.status != "cancelled"
+    ]
     return [_eng_to_dict(e, pnl.report_for(e.id)) for e in engagements]
 
 

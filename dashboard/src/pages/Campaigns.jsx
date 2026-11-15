@@ -152,6 +152,24 @@ export default function Campaigns() {
     return (e) => setForm({ ...form, [k]: isNum ? Number(e.target.value) : e.target.value });
   }
 
+  async function remove(c) {
+    const ok = window.confirm(
+      `Remove campaign "${c.customer_name}"? It will be cancelled and removed from this list. ` +
+        `Sent history and outcomes are preserved for audit.`
+    );
+    if (!ok) return;
+    setErr("");
+    // Optimistic removal, then reconcile with the server.
+    setCampaigns((list) => list.filter((x) => x.id !== c.id));
+    try {
+      await api.del(`/api/campaigns/${c.id}`);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      load();
+    }
+  }
+
   return (
     <div>
       <div className="page-head">
@@ -312,7 +330,18 @@ export default function Campaigns() {
               <td><span className={`pill pill-${c.status}`}>{c.status}</span></td>
               <td className="num">{c.pnl?.qualified_count ?? 0}</td>
               <td className="num">{money(c.pnl?.revenue_cents)}</td>
-              <td><Link to={`/campaigns/${c.id}`}>open →</Link></td>
+              <td style={{ whiteSpace: "nowrap" }}>
+                <Link to={`/campaigns/${c.id}`}>open →</Link>
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() => remove(c)}
+                  title="Remove this campaign from the list"
+                  style={{ marginLeft: 10, color: "#B42318", borderColor: "#F0C6C0" }}
+                >
+                  Delete
+                </button>
+              </td>
             </tr>
             );
           })}
